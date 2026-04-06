@@ -309,7 +309,7 @@ void FaultRecord(void)
     FaultRecordFunction(161, (C_MCUA4_MotorOverspeedProtection || C_MCUB4_MotorOverspeedProtection || bMotorSpeedOverFault), Three_Garde, Prat_MCU);
 
     /* Insulation fault */
-    FaultRecordFunction(162, CAN_TC1_TimeoutFLag, Three_Garde, Prat_VCU);
+    FaultRecordFunction(162, 0, Three_Garde, Prat_VCU);
 
     /* Load shedding failure */
     FaultRecordFunction(163, 0, Three_Garde, Prat_VCU);
