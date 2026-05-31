@@ -149,15 +149,15 @@ class FlatButton(tk.Frame):
 
         if self._pressed:
             bg  = self._darken(col, 30)
-            fg  = "white"
+            fg  = "#FFFFFF"
             brd = self._darken(col, 40)
         elif self._hover:
             bg  = self._lighten(col, 15)
-            fg  = "white"
+            fg  = "#FFFFFF"
             brd = self._lighten(col, 30)
         else:
             bg  = col
-            fg  = "white"
+            fg  = "#FFFFFF"
             brd = self._darken(col, 10)
 
         # Rounded rect
