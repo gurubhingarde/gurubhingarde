@@ -96,16 +96,17 @@ def load_hex(path):
 
 # ── Block builder ─────────────────────────────────────────────────────────────
 
-def build_blocks(firmware, base_addr):
-    # Address step between blocks = 0x2000 (0x20 CAN units × 256).
-    # Block size = 0x4000 (16 KB) for full blocks.
-    # Both values are fixed by the ECU's flash sector layout.
+ECU_FLASH_BASE = 0x003E8000   # ECU always expects blocks starting here
+
+def build_blocks(firmware, hex_base_addr):
+    # Block addresses always start at ECU_FLASH_BASE regardless of where
+    # the hex file's records begin. hex_base_addr is logged for info only.
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
     total     = -(-len(firmware) // MAX_BLOCK)
     raw_ids   = list(range(total + 1, 1, -1))
     block_ids = [1 if x == 2 else x for x in raw_ids]
-    blocks, offset, addr = [], 0, base_addr
+    blocks, offset, addr = [], 0, ECU_FLASH_BASE
     for b_id in block_ids:
         chunk = firmware[offset:offset + MAX_BLOCK]
         blocks.append({"addr": addr, "size": len(chunk),

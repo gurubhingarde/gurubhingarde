@@ -144,11 +144,13 @@ def load_hex(path: str) -> tuple[bytes, bytes, int]:
 
 # ── Block Layout ──────────────────────────────────────────────────────────────
 
-def build_blocks(firmware: bytes, base_addr: int) -> list[dict]:
+ECU_FLASH_BASE = 0x003E8000   # ECU always expects blocks starting here
+
+def build_blocks(firmware: bytes, hex_base_addr: int) -> list[dict]:
     """
-    Split firmware into flash blocks. Base address comes from the hex file
-    (first data record's full address) so different firmware versions with
-    different flash layouts are handled automatically.
+    Split firmware into flash blocks. Block addresses always start at
+    ECU_FLASH_BASE — the ECU expects this regardless of where the hex
+    file's first record happens to be. hex_base_addr is logged for info only.
     """
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
@@ -159,7 +161,7 @@ def build_blocks(firmware: bytes, base_addr: int) -> list[dict]:
 
     blocks = []
     offset = 0
-    addr   = base_addr
+    addr   = ECU_FLASH_BASE
 
     for b_id in block_ids:
         chunk = firmware[offset:offset + MAX_BLOCK]
