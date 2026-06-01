@@ -115,16 +115,19 @@ def build_blocks(firmware, hex_base_addr):
     """
     Build flash blocks from address-mapped firmware buffer.
     Block size=0x4000, address step=0x2000 (interleaved pattern).
-    Blocks are emitted from ECU_FLASH_BASE up to the last non-0xFF byte.
+    Blocks start at the first aligned offset with actual code so we never
+    send an all-0xFF leading block and then immediately re-erase that region.
     """
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
 
-    last_nonff = max((i for i, b in enumerate(firmware) if b != 0xFF), default=0)
-    data_end   = last_nonff + 1
+    first_nonff = next((i for i, b in enumerate(firmware) if b != 0xFF), 0)
+    last_nonff  = max((i for i, b in enumerate(firmware) if b != 0xFF), default=0)
+    data_start  = (first_nonff // ADDR_STEP) * ADDR_STEP
+    data_end    = last_nonff + 1
 
     offsets = []
-    off = 0
+    off = data_start
     while off < data_end:
         offsets.append(off)
         off += ADDR_STEP

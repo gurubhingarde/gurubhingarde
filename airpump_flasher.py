@@ -162,20 +162,23 @@ def build_blocks(firmware: bytes, hex_base_addr: int) -> list[dict]:
               0xFF-padded for any addresses not present in the hex.
 
     Block structure: size=0x4000, address step=0x2000 (interleaved pattern).
-    Blocks are generated from ECU_FLASH_BASE up to and including the last
-    non-0xFF byte.  Block IDs count down; ID 2 is replaced by 1.
+    Blocks start at the first ADDR_STEP-aligned offset that contains non-0xFF
+    data — this avoids sending a leading all-0xFF block and then immediately
+    re-erasing the same flash region in the next block, which some ECU flash
+    controllers reject.  Block IDs count down; ID 2 is replaced by 1.
     """
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
 
-    # Find last byte that is not 0xFF to determine how many blocks are needed.
-    last_nonff = max((i for i, b in enumerate(firmware) if b != 0xFF), default=0)
-    data_end   = last_nonff + 1   # exclusive
+    # Find data extent
+    first_nonff = next((i for i, b in enumerate(firmware) if b != 0xFF), 0)
+    last_nonff  = max((i for i, b in enumerate(firmware) if b != 0xFF), default=0)
+    data_start  = (first_nonff // ADDR_STEP) * ADDR_STEP  # align down
+    data_end    = last_nonff + 1   # exclusive
 
-    # Walk forward in steps of ADDR_STEP, emitting a block each time the
-    # current offset is still before data_end.
+    # Walk from data_start in ADDR_STEP increments up to data_end
     offsets = []
-    off = 0
+    off = data_start
     while off < data_end:
         offsets.append(off)
         off += ADDR_STEP
@@ -188,7 +191,6 @@ def build_blocks(firmware: bytes, hex_base_addr: int) -> list[dict]:
     for b_id, off in zip(block_ids, offsets):
         size  = min(MAX_BLOCK, len(firmware) - off)
         chunk = firmware[off:off + size]
-        # Pad last chunk to multiple of PAYLOAD_BYTES if needed (done at send time)
         blocks.append({
             "addr":     ECU_FLASH_BASE + off,
             "size":     size,
