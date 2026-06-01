@@ -115,26 +115,28 @@ def build_blocks(firmware, hex_base_addr):
     """
     Build flash blocks from address-mapped firmware buffer.
     Block size=0x4000, address step=0x2000 (interleaved pattern).
-    Blocks start at the first aligned offset with actual code so we never
-    send an all-0xFF leading block and then immediately re-erase that region.
+    Always starts from ECU_FLASH_BASE (offset 0 = 0x3E8000); ECU requires
+    this as the mandatory first block address.
     """
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
 
-    first_nonff = next((i for i, b in enumerate(firmware) if b != 0xFF), 0)
+    # Always start from ECU_FLASH_BASE (offset 0) — ECU hard-requires the
+    # first 04 INIT to be at 0x3E8000 regardless of hex start address.
     last_nonff  = max((i for i, b in enumerate(firmware) if b != 0xFF), default=0)
-    data_start  = (first_nonff // ADDR_STEP) * ADDR_STEP
     data_end    = last_nonff + 1
 
     offsets = []
-    off = data_start
-    while off < data_end:
+    off = 0
+    while True:
         offsets.append(off)
+        if off + MAX_BLOCK >= data_end:
+            break
         off += ADDR_STEP
 
     total     = len(offsets)
-    raw_ids   = list(range(total + 1, 1, -1))
-    block_ids = [1 if x == 2 else x for x in raw_ids]
+    # IDs count down naturally: first block = total, last block = 1
+    block_ids = list(range(total, 0, -1))
 
     blocks = []
     for b_id, off in zip(block_ids, offsets):

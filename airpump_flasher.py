@@ -162,30 +162,32 @@ def build_blocks(firmware: bytes, hex_base_addr: int) -> list[dict]:
               0xFF-padded for any addresses not present in the hex.
 
     Block structure: size=0x4000, address step=0x2000 (interleaved pattern).
-    Blocks start at the first ADDR_STEP-aligned offset that contains non-0xFF
-    data — this avoids sending a leading all-0xFF block and then immediately
-    re-erasing the same flash region in the next block, which some ECU flash
-    controllers reject.  Block IDs count down; ID 2 is replaced by 1.
+    Always starts from ECU_FLASH_BASE (offset 0 = 0x3E8000); ECU requires
+    this as the mandatory first block address.  Block IDs count down naturally
+    from total_blocks to 1.
     """
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
 
-    # Find data extent
-    first_nonff = next((i for i, b in enumerate(firmware) if b != 0xFF), 0)
+    # Find data extent — always start from ECU_FLASH_BASE (offset 0) because
+    # the ECU's bootloader hard-requires the first 04 INIT to be at 0x3E8000.
     last_nonff  = max((i for i, b in enumerate(firmware) if b != 0xFF), default=0)
-    data_start  = (first_nonff // ADDR_STEP) * ADDR_STEP  # align down
     data_end    = last_nonff + 1   # exclusive
 
-    # Walk from data_start in ADDR_STEP increments up to data_end
+    # Walk from offset 0 in ADDR_STEP increments.
+    # Stop once a block's full 0x4000 coverage reaches or passes data_end —
+    # the previous block already covers the tail, so we don't need another.
     offsets = []
-    off = data_start
-    while off < data_end:
+    off = 0
+    while True:
         offsets.append(off)
+        if off + MAX_BLOCK >= data_end:
+            break
         off += ADDR_STEP
 
     total_blocks = len(offsets)
-    raw_ids   = list(range(total_blocks + 1, 1, -1))
-    block_ids = [1 if x == 2 else x for x in raw_ids]
+    # IDs count down naturally: first block = total_blocks, last block = 1
+    block_ids = list(range(total_blocks, 0, -1))
 
     blocks = []
     for b_id, off in zip(block_ids, offsets):
