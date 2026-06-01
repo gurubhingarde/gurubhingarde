@@ -63,15 +63,21 @@ def load_hex(path):
             records.append((bc, addr, rt, data))
 
     ela = 0
-    crc_addr = None
+    crc_addr  = None
+    base_addr = None   # first data byte's full address = flash start
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
-        elif rt == 0 and bc == 4:
-            crc_addr = ela | addr
+        elif rt == 0:
+            if bc == 4:
+                crc_addr = ela | addr   # overwritten → ends up as the last 4-byte record
+            if base_addr is None and bc > 4:
+                base_addr = ela | addr  # first real data record
 
     if crc_addr is None:
         raise ValueError("No 4-byte CRC record found in hex file")
+    if base_addr is None:
+        raise ValueError("No data records found in hex file")
 
     seq = bytearray()
     ela = 0
@@ -85,19 +91,21 @@ def load_hex(path):
 
     crc_bytes = bytes(seq[-4:])
     firmware  = bytes(seq[:-4])
-    return firmware, crc_bytes, crc_addr
+    return firmware, crc_bytes, crc_addr, base_addr
 
 
 # ── Block builder ─────────────────────────────────────────────────────────────
 
-def build_blocks(firmware):
-    BASE_ADDR   = 0x003E8000
-    ADDR_STEP   = 0x2000
-    MAX_BLOCK   = 0x4000
-    total       = -(-len(firmware) // MAX_BLOCK)
-    raw_ids     = list(range(total + 1, 1, -1))
-    block_ids   = [1 if x == 2 else x for x in raw_ids]
-    blocks, offset, addr = [], 0, BASE_ADDR
+def build_blocks(firmware, base_addr):
+    # Address step between blocks = 0x2000 (0x20 CAN units × 256).
+    # Block size = 0x4000 (16 KB) for full blocks.
+    # Both values are fixed by the ECU's flash sector layout.
+    ADDR_STEP = 0x2000
+    MAX_BLOCK = 0x4000
+    total     = -(-len(firmware) // MAX_BLOCK)
+    raw_ids   = list(range(total + 1, 1, -1))
+    block_ids = [1 if x == 2 else x for x in raw_ids]
+    blocks, offset, addr = [], 0, base_addr
     for b_id in block_ids:
         chunk = firmware[offset:offset + MAX_BLOCK]
         blocks.append({"addr": addr, "size": len(chunk),
@@ -153,13 +161,14 @@ class FlashWorker:
         try:
             # ── Parse hex ────────────────────────────────────────────────────
             self.log("Loading hex file...")
-            firmware, crc_bytes, crc_addr = load_hex(self.hex_path)
+            firmware, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
             crc_int = int.from_bytes(crc_bytes, "big")
             self.log(f"  Firmware : {len(firmware):,} bytes")
+            self.log(f"  Base addr: 0x{base_addr:08X}")
             self.log(f"  CRC      : 0x{crc_int:08X}")
             self.log(f"  CRC addr : 0x{crc_addr:08X}")
 
-            blocks = build_blocks(firmware)
+            blocks = build_blocks(firmware, base_addr)
             self.log(f"  Blocks   : {len(blocks)}")
             for b in blocks:
                 self.log(f"    0x{b['addr']:08X}  {b['size']:5d} B  id=0x{b['block_id']:02X}")
@@ -240,11 +249,12 @@ class FlashWorker:
                     if self.abort:
                         raise RuntimeError("Aborted")
                     chunk = data[offset:offset + PAYLOAD_BYTES]
+                    # Pad only if firmware doesn't divide evenly (last frame),
+                    # using 0xFF (= erased flash value). Do NOT force FF FF —
+                    # those two bytes are real firmware data in every block.
                     if len(chunk) < PAYLOAD_BYTES:
                         chunk = chunk.ljust(PAYLOAD_BYTES, b'\xFF')
                     is_last = (fi == n - 1)
-                    if is_last:
-                        chunk = bytes(chunk[:4]) + bytes([0xFF, 0xFF])
                     t = LAST_FRAME_TIMEOUT if is_last else ACK_TIMEOUT
                     self.send_and_wait(make_frame(toggle, chunk), timeout=t)
                     toggle = 0x02 if toggle == 0x01 else 0x01

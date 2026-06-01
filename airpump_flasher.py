@@ -104,17 +104,23 @@ def load_hex(path: str) -> tuple[bytes, bytes, int]:
             data = bytes.fromhex(line[9:9 + bc * 2])
             records.append((bc, addr, rt, data))
 
-    # Forward pass: find the CRC record (last data record with exactly 4 bytes).
-    # Track current ELA so the 4-byte record gets the right upper address.
+    # Forward pass: find CRC record (last 4-byte data record) and base address
+    # (first data record with more than 4 bytes).
     ela = 0
+    base_addr = None
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
-        elif rt == 0 and bc == 4:
-            crc_addr = ela | addr  # overwritten each time → ends up as last one
+        elif rt == 0:
+            if bc == 4:
+                crc_addr = ela | addr   # overwritten → ends up as last 4-byte record
+            if base_addr is None and bc > 4:
+                base_addr = ela | addr  # first real data record
 
     if crc_addr is None:
         raise ValueError("Could not locate 4-byte CRC record in hex file")
+    if base_addr is None:
+        raise ValueError("No data records found in hex file")
 
     # Second pass: collect sequential data bytes
     ela = 0
@@ -131,36 +137,29 @@ def load_hex(path: str) -> tuple[bytes, bytes, int]:
 
     crc_bytes = bytes(seq[-4:])
     firmware  = bytes(seq[:-4])
-    log.info("Hex loaded: %d payload bytes + 4-byte CRC 0x%s  (at 0x%08X)",
-             len(firmware), crc_bytes.hex().upper(), crc_addr)
-    return firmware, crc_bytes, crc_addr
+    log.info("Hex loaded: %d payload bytes + 4-byte CRC 0x%s  base=0x%08X  crc_addr=0x%08X",
+             len(firmware), crc_bytes.hex().upper(), base_addr, crc_addr)
+    return firmware, crc_bytes, crc_addr, base_addr
 
 
 # ── Block Layout ──────────────────────────────────────────────────────────────
 
-def build_blocks(firmware: bytes) -> list[dict]:
+def build_blocks(firmware: bytes, base_addr: int) -> list[dict]:
     """
-    Split firmware into flash blocks matching the protocol's 04-frame layout.
-    Block addresses start at 0x003E8000 and increment by 0x2000 per block.
-    Full blocks = 0x4000 bytes each; last block may be smaller.
-    Returns list of dicts: {addr, size, data, block_id}
+    Split firmware into flash blocks. Base address comes from the hex file
+    (first data record's full address) so different firmware versions with
+    different flash layouts are handled automatically.
     """
-    BASE_ADDR    = 0x003E8000
-    ADDR_STEP    = 0x2000       # 0x20 in CAN units × 256
-    MAX_BLOCK    = 0x4000       # 16 KB
+    ADDR_STEP = 0x2000
+    MAX_BLOCK = 0x4000
 
-    total_blocks = -(-len(firmware) // MAX_BLOCK)  # ceiling division
-
-    # Block IDs observed in log for 5 blocks: 06, 05, 04, 03, 01
-    # Pattern: count down from (total+1), but ID=2 is always skipped —
-    # it represents a flash region not updated in this session.
-    # So the last block always gets ID=1 regardless of count.
-    raw_ids = list(range(total_blocks + 1, 1, -1))  # [6,5,4,3,2] for n=5
-    block_ids = [1 if x == 2 else x for x in raw_ids]  # replace 2 → 1
+    total_blocks = -(-len(firmware) // MAX_BLOCK)
+    raw_ids   = list(range(total_blocks + 1, 1, -1))
+    block_ids = [1 if x == 2 else x for x in raw_ids]
 
     blocks = []
     offset = 0
-    addr   = BASE_ADDR
+    addr   = base_addr
 
     for b_id in block_ids:
         chunk = firmware[offset:offset + MAX_BLOCK]
@@ -285,16 +284,13 @@ class CANFlasher:
 
         for frame_idx in range(n_frames):
             chunk = data[offset:offset + PAYLOAD_BYTES]
-            # Pad last chunk to 6 bytes if firmware doesn't divide evenly
+            # Pad with 0xFF (erased flash value) only if last chunk is short.
+            # Never overwrite actual firmware bytes — the FF FF seen in the
+            # original capture was real firmware data, not a protocol marker.
             if len(chunk) < PAYLOAD_BYTES:
                 chunk = chunk.ljust(PAYLOAD_BYTES, b'\xFF')
 
             is_last = (frame_idx == n_frames - 1)
-
-            # Last frame in block: bytes [4][5] MUST be FF FF (in-band marker)
-            if is_last:
-                chunk = bytes(chunk[:4]) + bytes([0xFF, 0xFF])
-
             frame = make_frame(toggle, chunk)
             ack_timeout = LAST_FRAME_TIMEOUT if is_last else ACK_TIMEOUT
             self.send_and_wait(frame, timeout=ack_timeout)
@@ -383,15 +379,15 @@ def flash(hex_path: str, interface: str, channel: str,
           bitrate: int = 500_000, dry_run: bool = False,
           args_crc_addr: int = None):
 
-    # 1. Parse hex file — CRC address is auto-detected from the file
-    firmware, crc_bytes, crc_addr_hex = load_hex(hex_path)
+    # 1. Parse hex file — base address and CRC address auto-detected from file
+    firmware, crc_bytes, crc_addr_hex, base_addr = load_hex(hex_path)
     crc_int  = int.from_bytes(crc_bytes, "big")
     CRC_ADDR = args_crc_addr if args_crc_addr else crc_addr_hex
-    log.info("Firmware: %d bytes, CRC=0x%08X, CRC addr=0x%08X",
-             len(firmware), crc_int, CRC_ADDR)
+    log.info("Firmware: %d bytes  base=0x%08X  CRC=0x%08X  crc_addr=0x%08X",
+             len(firmware), base_addr, crc_int, CRC_ADDR)
 
     # 2. Split into blocks
-    blocks = build_blocks(firmware)
+    blocks = build_blocks(firmware, base_addr)
     log.info("Split into %d blocks:", len(blocks))
     for b in blocks:
         log.info("  0x%08X  %5d bytes  id=0x%02X", b["addr"], b["size"], b["block_id"])
