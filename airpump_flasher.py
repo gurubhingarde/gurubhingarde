@@ -78,22 +78,23 @@ def verify_frame(data: bytes) -> bool:
 
 # ── Hex File Parser ───────────────────────────────────────────────────────────
 
-def load_hex(path: str) -> tuple[bytes, bytes, int]:
+def load_hex(path: str) -> tuple[bytes, bytes, int, int]:
     """
-    Parse Intel HEX file in the interleaved format used by this ECU.
-    Records are read SEQUENTIALLY as a bytestream (ignoring addresses).
+    Parse Intel HEX file using ADDRESS-MAPPED reading.
 
-    The CRC record is identified as the final data record with exactly 4 bytes —
-    its address is remembered so the PROGRAM command can target it precisely.
+    Each hex record is written at its actual flash address (ELA | record_addr).
+    Gaps between records are filled with 0xFF (erased flash value).
+    This correctly handles hex files that start at any address, including
+    those with interleaved/overlapping records.
 
-    Returns (firmware_payload, crc_4bytes, crc_flash_address).
+    The CRC record is the last 4-byte data record — its address is the target
+    for the PROGRAM command.
+
+    Returns (firmware_bytes, crc_4bytes, crc_flash_addr, hex_base_addr).
+    firmware_bytes is a flat buffer from ECU_FLASH_BASE to crc_flash_addr (exclusive).
     """
-    seq       = bytearray()
-    ela       = 0
-    crc_addr  = None  # flash address of the 4-byte CRC record
-
+    records = []
     with open(path) as f:
-        records = []
         for line in f:
             line = line.strip()
             if not line.startswith(':'):
@@ -104,16 +105,16 @@ def load_hex(path: str) -> tuple[bytes, bytes, int]:
             data = bytes.fromhex(line[9:9 + bc * 2])
             records.append((bc, addr, rt, data))
 
-    # Forward pass: find CRC record (last 4-byte data record) and base address
-    # (first data record with more than 4 bytes).
-    ela = 0
+    # Forward pass: find CRC address (last 4-byte data record) and base address
+    ela      = 0
+    crc_addr = None
     base_addr = None
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
             if bc == 4:
-                crc_addr = ela | addr   # overwritten → ends up as last 4-byte record
+                crc_addr = ela | addr   # last 4-byte record wins
             if base_addr is None and bc > 4:
                 base_addr = ela | addr  # first real data record
 
@@ -122,57 +123,78 @@ def load_hex(path: str) -> tuple[bytes, bytes, int]:
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
-    # Second pass: collect sequential data bytes
+    # Build address-mapped buffer: ECU_FLASH_BASE → crc_addr+4, filled with 0xFF
+    buf_size = crc_addr + 4 - ECU_FLASH_BASE
+    if buf_size <= 0:
+        raise ValueError(f"CRC addr 0x{crc_addr:08X} is below ECU_FLASH_BASE 0x{ECU_FLASH_BASE:08X}")
+    buf = bytearray(b'\xFF' * buf_size)
+
     ela = 0
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
-            seq += data
+            full_addr = ela | addr
+            offset    = full_addr - ECU_FLASH_BASE
+            if 0 <= offset and offset + bc <= buf_size:
+                buf[offset:offset + bc] = data
         elif rt == 1:
             break
 
-    if len(seq) < 4:
-        raise ValueError("HEX file too small")
+    crc_bytes = bytes(buf[crc_addr - ECU_FLASH_BASE : crc_addr - ECU_FLASH_BASE + 4])
+    firmware  = bytes(buf[:crc_addr - ECU_FLASH_BASE])
 
-    crc_bytes = bytes(seq[-4:])
-    firmware  = bytes(seq[:-4])
-    log.info("Hex loaded: %d payload bytes + 4-byte CRC 0x%s  base=0x%08X  crc_addr=0x%08X",
+    log.info("Hex loaded (address-mapped): %d fw bytes + 4-byte CRC 0x%s  "
+             "base=0x%08X  crc_addr=0x%08X",
              len(firmware), crc_bytes.hex().upper(), base_addr, crc_addr)
     return firmware, crc_bytes, crc_addr, base_addr
 
 
 # ── Block Layout ──────────────────────────────────────────────────────────────
 
-ECU_FLASH_BASE = 0x003E8000   # ECU always expects blocks starting here
+ECU_FLASH_BASE = 0x003E8000   # ECU flash always starts here
 
 def build_blocks(firmware: bytes, hex_base_addr: int) -> list[dict]:
     """
-    Split firmware into flash blocks. Block addresses always start at
-    ECU_FLASH_BASE — the ECU expects this regardless of where the hex
-    file's first record happens to be. hex_base_addr is logged for info only.
+    Split the address-mapped firmware buffer into flash blocks.
+
+    firmware: flat bytes from ECU_FLASH_BASE (index 0) to crc_addr (exclusive),
+              0xFF-padded for any addresses not present in the hex.
+
+    Block structure: size=0x4000, address step=0x2000 (interleaved pattern).
+    Blocks are generated from ECU_FLASH_BASE up to and including the last
+    non-0xFF byte.  Block IDs count down; ID 2 is replaced by 1.
     """
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
 
-    total_blocks = -(-len(firmware) // MAX_BLOCK)
+    # Find last byte that is not 0xFF to determine how many blocks are needed.
+    last_nonff = max((i for i, b in enumerate(firmware) if b != 0xFF), default=0)
+    data_end   = last_nonff + 1   # exclusive
+
+    # Walk forward in steps of ADDR_STEP, emitting a block each time the
+    # current offset is still before data_end.
+    offsets = []
+    off = 0
+    while off < data_end:
+        offsets.append(off)
+        off += ADDR_STEP
+
+    total_blocks = len(offsets)
     raw_ids   = list(range(total_blocks + 1, 1, -1))
     block_ids = [1 if x == 2 else x for x in raw_ids]
 
     blocks = []
-    offset = 0
-    addr   = ECU_FLASH_BASE
-
-    for b_id in block_ids:
-        chunk = firmware[offset:offset + MAX_BLOCK]
+    for b_id, off in zip(block_ids, offsets):
+        size  = min(MAX_BLOCK, len(firmware) - off)
+        chunk = firmware[off:off + size]
+        # Pad last chunk to multiple of PAYLOAD_BYTES if needed (done at send time)
         blocks.append({
-            "addr":     addr,
-            "size":     len(chunk),
+            "addr":     ECU_FLASH_BASE + off,
+            "size":     size,
             "data":     chunk,
             "block_id": b_id,
         })
-        offset += MAX_BLOCK
-        addr   += ADDR_STEP
 
     return blocks
 
