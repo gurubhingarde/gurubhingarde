@@ -47,14 +47,41 @@ def verify_frame(data):
     return len(data) == 8 and xor8(data) == data[7]
 
 
-# ── Hex loader ────────────────────────────────────────────────────────────────
+# ── Flash layout constants ────────────────────────────────────────────────────
+
+ECU_FLASH_BASE = 0x003E8000   # lowest flash address the ECU bootloader manages
+ADDR_STEP      = 0x2000       # each block start advances 8 KB
+MAX_BLOCK      = 0x4000       # each block covers 16 KB
+
+
+# ── PHASE 1 · Address-mapped hex load ────────────────────────────────────────
+#
+# Intel HEX records for this ECU use Extended Linear Address (ELA/rt=4) to
+# place code at absolute 32-bit addresses.  Records are interleaved — every
+# 32-byte data record overlaps the previous one by 16 bytes — so we MUST
+# write each record at its declared address, not concatenate them in order.
+#
+# Steps:
+#   1. Allocate a bytearray spanning ECU_FLASH_BASE … CRC_ADDR+4, pre-filled
+#      with 0xFF (= the value of erased flash).
+#   2. For each data record: full_addr = (ELA << 16) | record_offset.
+#      Write those bytes at (full_addr - ECU_FLASH_BASE) into the buffer.
+#   3. Gaps between records stay 0xFF — correct for both reading and writing.
+#
+# CRC sentinel: the linker places a 4-byte CRC at the very end of the image
+# (the last data record with exactly 4 bytes).  Its address is the target for
+# the PROGRAM command; its value is sent in VERIFY and CLOSE frames.
 
 def load_hex(path):
     """
-    Parse Intel HEX using ADDRESS-MAPPED reading.
-    Each record is written at its actual flash address; gaps become 0xFF.
-    Returns (firmware_bytes, crc_4bytes, crc_flash_addr, hex_base_addr).
-    firmware_bytes is a flat buffer from ECU_FLASH_BASE to crc_flash_addr (exclusive).
+    Returns (firmware, crc_bytes, crc_addr, base_addr, patched_from).
+
+    firmware     : bytes from ECU_FLASH_BASE to crc_addr (exclusive),
+                   0xFF-filled for gaps, with base-vector patch applied.
+    crc_bytes    : 4 bytes stored at crc_addr in the hex.
+    crc_addr     : absolute flash address of the CRC record.
+    base_addr    : first flash address that has real code in the hex.
+    patched_from : flash address we copied the vector hint from, or None.
     """
     records = []
     with open(path) as f:
@@ -68,26 +95,31 @@ def load_hex(path):
             data = bytes.fromhex(line[9:9 + bc * 2])
             records.append((bc, addr, rt, data))
 
-    ela = 0
+    # Pass 1 — find CRC address and first real-code address
+    ela       = 0
     crc_addr  = None
     base_addr = None
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
+            full = ela | addr
             if bc == 4:
-                crc_addr = ela | addr   # last 4-byte record = CRC
+                crc_addr = full          # last 4-byte record = CRC sentinel
             if base_addr is None and bc > 4:
-                base_addr = ela | addr  # first real data record
+                base_addr = full         # first substantial data record
 
     if crc_addr is None:
         raise ValueError("No 4-byte CRC record found in hex file")
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
+    # Pass 2 — fill address-mapped buffer
     buf_size = crc_addr + 4 - ECU_FLASH_BASE
     if buf_size <= 0:
-        raise ValueError(f"CRC addr 0x{crc_addr:08X} below ECU_FLASH_BASE 0x{ECU_FLASH_BASE:08X}")
+        raise ValueError(
+            f"CRC addr 0x{crc_addr:08X} is below ECU_FLASH_BASE 0x{ECU_FLASH_BASE:08X}"
+        )
     buf = bytearray(b'\xFF' * buf_size)
 
     ela = 0
@@ -95,8 +127,7 @@ def load_hex(path):
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
-            full_addr = ela | addr
-            offset    = full_addr - ECU_FLASH_BASE
+            offset = (ela | addr) - ECU_FLASH_BASE
             if 0 <= offset and offset + bc <= buf_size:
                 buf[offset:offset + bc] = data
         elif rt == 1:
@@ -104,64 +135,112 @@ def load_hex(path):
 
     crc_bytes = bytes(buf[crc_addr - ECU_FLASH_BASE : crc_addr - ECU_FLASH_BASE + 4])
 
-    # If ECU_FLASH_BASE has no code (hex starts at a higher address), copy the
-    # first 8 bytes from the first code page into offset 0.  The ECU reads back
-    # flash[ECU_FLASH_BASE+4] (ARM reset-vector) after writing block 1 and will
-    # abort the session if it is 0xFFFFFFFF (erased).  For old firmware whose
-    # linker placed vectors at 0x3EA000 rather than 0x3E8000, those 8 bytes
-    # (initial-SP + reset-handler) are a valid stand-in — the bootloader sets
-    # VTOR before jumping to the app so only the app's own vector table matters
-    # at runtime.
+    # ── PHASE 2 · Base-vector patch ──────────────────────────────────────────
+    #
+    # After writing block 1 (at ECU_FLASH_BASE), the ECU bootloader reads back
+    # flash[ECU_FLASH_BASE + 4] — the ARM Cortex-M reset-handler vector slot.
+    # If that 32-bit word is 0xFFFFFFFF (erased), the bootloader considers the
+    # image invalid and silently stops ACK'ing all subsequent 04 INIT frames.
+    #
+    # Some firmware hex files start at 0x3EA000, not 0x3E8000, because:
+    #   • 0x3E8000–0x3E9FFF is the factory bootloader, hardware write-protected
+    #   • Application code starts at the next 8 KB page (0x3EA000)
+    #   • The linker never emits records for the protected range
+    #
+    # For those files, buf[0:8] is all 0xFF → ECU aborts after block 1.
+    #
+    # Fix: copy the first 8 bytes (initial-SP + reset-handler) from the first
+    # non-empty ADDR_STEP-aligned page into offset 0 of the buffer.
+    # Why this is safe:
+    #   • The ARM bootloader sets the CPU's VTOR register to the application's
+    #     own vector table address before jumping to it.  Only VTOR's target is
+    #     used at runtime; whatever sits at 0x3E8000 is never executed.
+    #   • The linker-computed CRC in the hex covers only the application range
+    #     (0x3EA000+), so patching the protected-bootloader page does not
+    #     invalidate it.
+    #   • For hex files that already have code at ECU_FLASH_BASE the first 8
+    #     bytes are naturally non-FF and this block is skipped entirely.
+    patched_from = None
     if all(b == 0xFF for b in buf[0:8]):
-        first_code = next(
-            (off for off in range(0x2000, buf_size, 0x2000)
-             if any(b != 0xFF for b in buf[off:off + 8])),
-            None
-        )
-        if first_code is not None:
-            buf[0:8] = buf[first_code:first_code + 8]
+        for page in range(ADDR_STEP, buf_size, ADDR_STEP):
+            if any(b != 0xFF for b in buf[page:page + 8]):
+                buf[0:8]     = buf[page:page + 8]
+                patched_from = ECU_FLASH_BASE + page
+                break
 
-    firmware  = bytes(buf[:crc_addr - ECU_FLASH_BASE])
-    return firmware, crc_bytes, crc_addr, base_addr
+    firmware = bytes(buf[:crc_addr - ECU_FLASH_BASE])
+    return firmware, crc_bytes, crc_addr, base_addr, patched_from
 
 
-# ── Block builder ─────────────────────────────────────────────────────────────
+# ── PHASE 3 · Block layout ────────────────────────────────────────────────────
+#
+# The ECU flash controller uses an INTERLEAVED scheme:
+#   block step = ADDR_STEP = 0x2000 (8 KB)
+#   block size = MAX_BLOCK = 0x4000 (16 KB)
+#
+# Each block therefore overlaps the next by 8 KB.  When the ECU receives a
+# 04 INIT it erases the full 16 KB at that address, then the tool streams
+# exactly MAX_BLOCK bytes of data.  The next 04 INIT starts 8 KB higher, so
+# the 8 KB that were just written are covered again by the new block — this
+# is the intentional interleave the vendor tool uses.
+#
+# Three rules derived from vendor log analysis:
+#
+#   Rule 1 — Always start at ECU_FLASH_BASE (0x3E8000).
+#     The bootloader state machine hard-requires the FIRST 04 INIT to target
+#     0x3E8000.  Sending any other address as the first block gets no ACK.
+#
+#   Rule 2 — Stop when the current block's 16 KB span covers data_end.
+#     data_end = index of last non-0xFF byte + 1.  Once off + MAX_BLOCK
+#     reaches or exceeds data_end, the current block is the last one; no
+#     further block is needed because the tail is already covered.
+#     (Using "while off < data_end" over-generates one extra block.)
+#
+#   Rule 3 — Block IDs count down from total_blocks to 1.
+#     Each block's ID is embedded in the EOB (end-of-block) frame.  The ECU
+#     validates the decreasing sequence; a wrong ID causes it to refuse the
+#     next 04 INIT.  Use range(total, 0, -1) — no +1 offset, no special-case
+#     replacement of 2→1.
 
-ECU_FLASH_BASE = 0x003E8000
-
-def build_blocks(firmware, hex_base_addr):
+def build_blocks(firmware, patched_from, log_fn=None):
     """
-    Build flash blocks from address-mapped firmware buffer.
-    Block size=0x4000, address step=0x2000 (interleaved pattern).
-    Always starts from ECU_FLASH_BASE (offset 0 = 0x3E8000); ECU requires
-    this as the mandatory first block address.
-    """
-    ADDR_STEP = 0x2000
-    MAX_BLOCK = 0x4000
+    Split firmware into flash blocks.
 
-    # Always start from ECU_FLASH_BASE (offset 0) — ECU hard-requires the
-    # first 04 INIT to be at 0x3E8000 regardless of hex start address.
-    last_nonff  = max((i for i, b in enumerate(firmware) if b != 0xFF), default=0)
-    data_end    = last_nonff + 1
+    firmware     : bytes from ECU_FLASH_BASE to crc_addr (exclusive).
+    patched_from : flash address vectors were copied from, or None (for log).
+    log_fn       : optional callable(str) used to emit block-layout lines.
+
+    Returns list of {addr, size, data, block_id}.
+    """
+    last_nonff = max((i for i, b in enumerate(firmware) if b != 0xFF), default=0)
+    data_end   = last_nonff + 1
 
     offsets = []
     off = 0
     while True:
         offsets.append(off)
-        if off + MAX_BLOCK >= data_end:
+        if off + MAX_BLOCK >= data_end:   # this block covers the tail → stop
             break
         off += ADDR_STEP
 
     total     = len(offsets)
-    # IDs count down naturally: first block = total, last block = 1
-    block_ids = list(range(total, 0, -1))
+    block_ids = list(range(total, 0, -1))  # [N, N-1, …, 2, 1]
 
     blocks = []
     for b_id, off in zip(block_ids, offsets):
         size  = min(MAX_BLOCK, len(firmware) - off)
         chunk = firmware[off:off + size]
-        blocks.append({"addr": ECU_FLASH_BASE + off, "size": size,
-                        "data": chunk, "block_id": b_id})
+        note  = f"  ← vectors patched from 0x{patched_from:08X}" \
+                if (off == 0 and patched_from) else ""
+        if log_fn:
+            log_fn(f"    0x{ECU_FLASH_BASE + off:08X}  {size:5d} B  "
+                   f"id=0x{b_id:02X}{note}")
+        blocks.append({
+            "addr":     ECU_FLASH_BASE + off,
+            "size":     size,
+            "data":     chunk,
+            "block_id": b_id,
+        })
     return blocks
 
 def addr_to_04_payload(full_addr, size):
@@ -211,17 +290,18 @@ class FlashWorker:
         try:
             # ── Parse hex ────────────────────────────────────────────────────
             self.log("Loading hex file...")
-            firmware, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
+            firmware, crc_bytes, crc_addr, base_addr, patched_from = load_hex(self.hex_path)
             crc_int = int.from_bytes(crc_bytes, "big")
             self.log(f"  Firmware : {len(firmware):,} bytes")
             self.log(f"  Base addr: 0x{base_addr:08X}")
             self.log(f"  CRC      : 0x{crc_int:08X}")
             self.log(f"  CRC addr : 0x{crc_addr:08X}")
+            if patched_from:
+                self.log(f"  Note     : 0x{ECU_FLASH_BASE:08X}–0x{ECU_FLASH_BASE+7:08X} "
+                         f"patched with ARM vectors from 0x{patched_from:08X}")
 
-            blocks = build_blocks(firmware, base_addr)
-            self.log(f"  Blocks   : {len(blocks)}")
-            for b in blocks:
-                self.log(f"    0x{b['addr']:08X}  {b['size']:5d} B  id=0x{b['block_id']:02X}")
+            self.log(f"  Blocks:")
+            blocks = build_blocks(firmware, patched_from, log_fn=self.log)
 
             total_frames = sum(
                 -(-b["size"] // PAYLOAD_BYTES) for b in blocks
