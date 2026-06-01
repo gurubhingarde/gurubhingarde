@@ -170,11 +170,26 @@ class FlashWorker:
 
             # ── Open CAN ─────────────────────────────────────────────────────
             self.log(f"\nOpening CAN: {self.interface} / {self.channel} @ {self.bitrate} bps")
-            self.bus = can.interface.Bus(
-                interface=self.interface,
-                channel=self.channel,
-                bitrate=self.bitrate,
-            )
+            try:
+                self.bus = can.interface.Bus(
+                    interface=self.interface,
+                    channel=self.channel,
+                    bitrate=self.bitrate,
+                )
+            except Exception as e:
+                hint = ""
+                msg  = str(e).lower()
+                if "invalid" in msg or "handle" in msg:
+                    hint = (
+                        "\n  Hint: Channel not found — use '🔍 Detect' button to find"
+                        " your PCAN device,\n  or check that PCAN-USB is plugged in"
+                        " and the Peak driver is installed."
+                    )
+                elif "access" in msg or "permission" in msg:
+                    hint = "\n  Hint: Permission denied — try running as Administrator (Windows) or check udev rules (Linux)."
+                elif "bitrate" in msg or "baud" in msg:
+                    hint = "\n  Hint: Bitrate mismatch — try 500000 bps."
+                raise RuntimeError(f"Cannot open CAN bus: {e}{hint}") from None
             self.log("  CAN bus open ✓")
 
             # ── Phase 1: Keepalive ────────────────────────────────────────────
@@ -305,6 +320,28 @@ DEFAULT_CHANNELS   = {
 BITRATES = ["125000", "250000", "500000", "1000000"]
 
 
+def detect_pcan_channels():
+    """
+    Probe every PCAN_USBBUS1..8 channel at 500k to find which ones are
+    physically present.  Returns a list of working channel names.
+    Works on Windows (Peak driver) and Linux (SocketCAN peak_usb).
+    """
+    found = []
+    try:
+        import can
+        for ch in ["PCAN_USBBUS1","PCAN_USBBUS2","PCAN_USBBUS3","PCAN_USBBUS4",
+                   "PCAN_USBBUS5","PCAN_USBBUS6","PCAN_USBBUS7","PCAN_USBBUS8"]:
+            try:
+                bus = can.interface.Bus(interface="pcan", channel=ch, bitrate=500_000)
+                bus.shutdown()
+                found.append(ch)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return found
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -381,7 +418,11 @@ class App(tk.Tk):
         self.chan_var = tk.StringVar(value="PCAN_USBBUS1")
         self.chan_cb  = ttk.Combobox(row1, textvariable=self.chan_var,
                                      values=PCAN_CHANNELS, width=18)
-        self.chan_cb.pack(side="left", padx=(6, 24))
+        self.chan_cb.pack(side="left", padx=(6, 6))
+
+        self.detect_btn = ttk.Button(row1, text="🔍 Detect",
+                                     command=self._detect_channels, width=10)
+        self.detect_btn.pack(side="left", padx=(0, 18))
 
         ttk.Label(row1, text="Bitrate").pack(side="left")
         self.baud_var = tk.StringVar(value="500000")
@@ -449,6 +490,41 @@ class App(tk.Tk):
         channels = DEFAULT_CHANNELS.get(iface, ["0"])
         self.chan_cb["values"] = channels
         self.chan_var.set(channels[0])
+        # only show Detect button for PCAN
+        if iface == "pcan":
+            self.detect_btn.pack(side="left", padx=(0, 18))
+        else:
+            self.detect_btn.pack_forget()
+
+    def _detect_channels(self):
+        """Probe PCAN USB channels and populate the dropdown."""
+        self.detect_btn.configure(state="disabled", text="Scanning…")
+        self.status_lbl.configure(text="Detecting…", foreground="#fab387")
+        self.update_idletasks()
+
+        def _scan():
+            found = detect_pcan_channels()
+            self.after(0, lambda: self._on_detect_done(found))
+
+        threading.Thread(target=_scan, daemon=True).start()
+
+    def _on_detect_done(self, found):
+        self.detect_btn.configure(state="normal", text="🔍 Detect")
+        if found:
+            self.chan_cb["values"] = found
+            self.chan_var.set(found[0])
+            self.status_lbl.configure(
+                text=f"Found: {', '.join(found)}", foreground="#a6e3a1")
+            self._log(f"Detected PCAN channels: {', '.join(found)}")
+        else:
+            self.status_lbl.configure(
+                text="No PCAN device found", foreground="#f38ba8")
+            self._log(
+                "❌  No PCAN device detected.\n"
+                "    • Make sure the PCAN-USB is plugged in\n"
+                "    • Windows: install PCAN driver from peak-system.com\n"
+                "    • Linux:   sudo modprobe peak_usb  (then use socketcan/can0)"
+            )
 
     def _clear_log(self):
         self.console.configure(state="normal")
