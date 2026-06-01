@@ -103,6 +103,24 @@ def load_hex(path):
             break
 
     crc_bytes = bytes(buf[crc_addr - ECU_FLASH_BASE : crc_addr - ECU_FLASH_BASE + 4])
+
+    # If ECU_FLASH_BASE has no code (hex starts at a higher address), copy the
+    # first 8 bytes from the first code page into offset 0.  The ECU reads back
+    # flash[ECU_FLASH_BASE+4] (ARM reset-vector) after writing block 1 and will
+    # abort the session if it is 0xFFFFFFFF (erased).  For old firmware whose
+    # linker placed vectors at 0x3EA000 rather than 0x3E8000, those 8 bytes
+    # (initial-SP + reset-handler) are a valid stand-in — the bootloader sets
+    # VTOR before jumping to the app so only the app's own vector table matters
+    # at runtime.
+    if all(b == 0xFF for b in buf[0:8]):
+        first_code = next(
+            (off for off in range(0x2000, buf_size, 0x2000)
+             if any(b != 0xFF for b in buf[off:off + 8])),
+            None
+        )
+        if first_code is not None:
+            buf[0:8] = buf[first_code:first_code + 8]
+
     firmware  = bytes(buf[:crc_addr - ECU_FLASH_BASE])
     return firmware, crc_bytes, crc_addr, base_addr
 
