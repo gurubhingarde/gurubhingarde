@@ -27,10 +27,10 @@ HEARTBEAT_INTERVAL = 0.101
 HEARTBEAT_COUNT    = 20
 ECU_WAKEUP_TIMEOUT = 3.0
 PAYLOAD_BYTES      = 6
-ERASE_TIMEOUT      = 2.0
-PROG_TIMEOUT       = 2.0
-ACK_TIMEOUT        = 0.5
-LAST_FRAME_TIMEOUT = 0.5
+ERASE_TIMEOUT      = 5.0
+PROG_TIMEOUT       = 5.0
+ACK_TIMEOUT        = 1.0
+LAST_FRAME_TIMEOUT = 1.0
 
 
 # ── Protocol helpers ──────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ class FlashWorker:
         while time.monotonic() < deadline:
             if self.abort:
                 raise RuntimeError("Aborted by user")
-            rx = self.bus.recv(timeout=min(0.05, deadline - time.monotonic()))
+            rx = self.bus.recv(timeout=min(0.01, deadline - time.monotonic()))
             if rx and rx.arbitration_id == self.ecu_id and bytes(rx.data) == data:
                 return
         raise RuntimeError(f"No ACK for {data.hex().upper()}")
