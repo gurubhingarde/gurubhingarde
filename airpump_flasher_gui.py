@@ -148,7 +148,7 @@ class FlashWorker:
         self.log_q.put(msg)
 
     def progress(self, val):
-        self.progress_q.put(max(0.0, min(1.0, val)))
+        self.progress_q.put(val)  # negative = failure sentinel, pass through as-is
 
     def send_and_wait(self, data, timeout=ACK_TIMEOUT):
         assert verify_frame(data)
@@ -158,7 +158,8 @@ class FlashWorker:
         while time.monotonic() < deadline:
             if self.abort:
                 raise RuntimeError("Aborted by user")
-            rx = self.bus.recv(timeout=min(0.01, deadline - time.monotonic()))
+            # Cap recv at 50 ms so the abort flag is checked frequently
+            rx = self.bus.recv(timeout=min(0.05, deadline - time.monotonic()))
             if rx and rx.arbitration_id == self.ecu_id and bytes(rx.data) == data:
                 return
         raise RuntimeError(f"No ACK for {data.hex().upper()}")
@@ -305,8 +306,8 @@ class FlashWorker:
 
         except Exception as e:
             self.log(f"\n❌  ERROR: {e}")
-            self.progress(-1)  # signal failure
         finally:
+            self.progress(-1)   # always signal UI to re-enable Flash button
             if self.bus:
                 self.bus.shutdown()
 
@@ -619,7 +620,8 @@ class App(tk.Tk):
             self.worker.abort = True
         self.abort_btn.configure(state="disabled", text="Stopping…")
         self.status_lbl.configure(text="Stopping…", foreground="#f38ba8")
-        # Worker will put -1 in progress_q when it exits, which re-enables Flash
+        # Safety net: if worker doesn't signal within 3 s, force-reset the UI
+        self.after(3000, self._force_reset_if_stopping)
 
     def _exit(self):
         if self.worker:
@@ -631,6 +633,14 @@ class App(tk.Tk):
         self.prog_bar.configure(style="green.Horizontal.TProgressbar")
         self.status_lbl.configure(text="Ready", foreground="#a6e3a1")
 
+    def _force_reset_if_stopping(self):
+        """Called 3 s after Stop is pressed. If the UI is still stuck in
+        Stopping state (worker didn't signal), reset everything manually."""
+        if self.status_lbl.cget("text") in ("Stopping…", "Aborting…"):
+            self.abort_btn.configure(text="■  Stop")
+            self._set_running(False)
+            self._reset_progress()
+
     # ── Poll queues ───────────────────────────────────────────────────────────
 
     def _poll(self):
@@ -641,7 +651,10 @@ class App(tk.Tk):
         # drain progress queue
         while not self.prog_q.empty():
             val = self.prog_q.get_nowait()
-            if val < 0:  # failure / abort signal
+            if val < 0:  # failure / abort sentinel from finally block
+                # Ignore if flash already completed successfully
+                if self.status_lbl.cget("text") == "Done ✓":
+                    continue
                 self.prog_bar.configure(style="red.Horizontal.TProgressbar")
                 self.prog_var.set(100)
                 was_aborted = self.worker and self.worker.abort
@@ -654,7 +667,7 @@ class App(tk.Tk):
                 # Reset progress bar to 0 after 2 s so UI is ready for re-flash
                 self.after(2000, self._reset_progress)
             else:
-                self.prog_var.set(val * 100)
+                self.prog_var.set(min(val, 1.0) * 100)
                 if val >= 1.0:
                     self.status_lbl.configure(text="Done ✓", foreground="#a6e3a1")
                     self._set_running(False)
