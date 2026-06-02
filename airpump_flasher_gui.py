@@ -14,10 +14,12 @@ import sys
 
 import can
 
-# ── Protocol constants (same as CLI tool) ─────────────────────────────────────
+# ── Protocol constants ────────────────────────────────────────────────────────
 
-TOOL_ID  = 0x180006FF
-ECU_ID   = 0x1800FF06
+PUMP_TYPES = {
+    "Air Pump": {"tool_id": 0x180006FF, "ecu_id": 0x1800FF06},
+    "Oil Pump": {"tool_id": 0x180005FF, "ecu_id": 0x1800FF05},
+}
 BCAST_ID = 0x1800FFFF
 
 HEARTBEAT          = bytes([0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x07])
@@ -129,12 +131,15 @@ def addr_to_04_payload(full_addr, size):
 # ── Flash worker (runs in background thread) ──────────────────────────────────
 
 class FlashWorker:
-    def __init__(self, interface, channel, bitrate, hex_path, log_q, progress_q):
+    def __init__(self, interface, channel, bitrate, hex_path, log_q, progress_q,
+                 tool_id, ecu_id):
         self.interface  = interface
         self.channel    = channel
         self.bitrate    = bitrate
         self.hex_path   = hex_path
         self.log_q      = log_q      # queue for log messages (str)
+        self.tool_id    = tool_id
+        self.ecu_id     = ecu_id
         self.progress_q = progress_q # queue for progress (0.0–1.0)
         self.bus        = None
         self.abort      = False
@@ -147,14 +152,14 @@ class FlashWorker:
 
     def send_and_wait(self, data, timeout=ACK_TIMEOUT):
         assert verify_frame(data)
-        msg = can.Message(arbitration_id=TOOL_ID, data=data, is_extended_id=True)
+        msg = can.Message(arbitration_id=self.tool_id, data=data, is_extended_id=True)
         self.bus.send(msg)
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self.abort:
                 raise RuntimeError("Aborted by user")
             rx = self.bus.recv(timeout=min(0.05, deadline - time.monotonic()))
-            if rx and rx.arbitration_id == ECU_ID and bytes(rx.data) == data:
+            if rx and rx.arbitration_id == self.ecu_id and bytes(rx.data) == data:
                 return
         raise RuntimeError(f"No ACK for {data.hex().upper()}")
 
@@ -162,6 +167,7 @@ class FlashWorker:
         try:
             # ── Parse hex ────────────────────────────────────────────────────
             self.log("Loading hex file...")
+            self.log(f"  Tool ID  : 0x{self.tool_id:08X}  ECU ID: 0x{self.ecu_id:08X}")
             firmware, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
             crc_int = int.from_bytes(crc_bytes, "big")
             self.log(f"  Firmware : {len(firmware):,} bytes")
@@ -202,7 +208,7 @@ class FlashWorker:
 
             # ── Phase 1: Keepalive ────────────────────────────────────────────
             self.log("\n[1/5] Keepalive — waking ECU...")
-            hb_msg = can.Message(arbitration_id=TOOL_ID, data=HEARTBEAT, is_extended_id=True)
+            hb_msg = can.Message(arbitration_id=self.tool_id, data=HEARTBEAT, is_extended_id=True)
             for i in range(HEARTBEAT_COUNT):
                 if self.abort:
                     raise RuntimeError("Aborted")
@@ -215,7 +221,7 @@ class FlashWorker:
                 if self.abort:
                     raise RuntimeError("Aborted")
                 rx = self.bus.recv(timeout=0.2)
-                if rx and rx.arbitration_id == ECU_ID:
+                if rx and rx.arbitration_id == self.ecu_id:
                     self.log(f"  ECU responded ✓  ({bytes(rx.data).hex().upper()})")
                     break
             else:
@@ -354,7 +360,7 @@ def detect_pcan_channels():
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Airpump ECU Flash Tool")
+        self.title("ECU Flash Tool")
         self.resizable(False, False)
         self.configure(bg="#1e1e2e")
 
@@ -399,6 +405,24 @@ class App(tk.Tk):
 
         root = ttk.Frame(self, padding=16)
         root.pack(fill="both", expand=True)
+
+        # ── Pump type ─────────────────────────────────────────────────────────
+        pg = ttk.LabelFrame(root, text=" Pump Type ", padding=10)
+        pg.pack(fill="x", **PAD)
+
+        self.pump_var = tk.StringVar(value="Air Pump")
+        for name in PUMP_TYPES:
+            ttk.Radiobutton(
+                pg, text=name, variable=self.pump_var, value=name,
+                style="TRadiobutton",
+            ).pack(side="left", padx=16)
+
+        # style radio buttons to match dark theme
+        style.configure("TRadiobutton", background="#1e1e2e", foreground="#cdd6f4",
+                        font=("Segoe UI", 10))
+        style.map("TRadiobutton",
+                  background=[("active", "#1e1e2e")],
+                  foreground=[("active", "#89b4fa")])
 
         # ── Hex file ──────────────────────────────────────────────────────────
         fg = ttk.LabelFrame(root, text=" Firmware File ", padding=10)
@@ -568,6 +592,7 @@ class App(tk.Tk):
             self._log("❌  ERROR: No hex file selected")
             return
 
+        pump = PUMP_TYPES[self.pump_var.get()]
         self.prog_var.set(0)
         self.prog_bar.configure(style="green.Horizontal.TProgressbar")
         self.status_lbl.configure(text="Flashing…", foreground="#fab387")
@@ -581,6 +606,8 @@ class App(tk.Tk):
             hex_path=path,
             log_q=self.log_q,
             progress_q=self.prog_q,
+            tool_id=pump["tool_id"],
+            ecu_id=pump["ecu_id"],
         )
         threading.Thread(target=self.worker.run, daemon=True).start()
 
