@@ -190,11 +190,11 @@ def load_hex(path):
 #     The bootloader state machine hard-requires the FIRST 04 INIT to target
 #     0x3E8000.  Sending any other address as the first block gets no ACK.
 #
-#   Rule 2 — Stop when the current block's 16 KB span covers data_end.
-#     data_end = index of last non-0xFF byte + 1.  Once off + MAX_BLOCK
-#     reaches or exceeds data_end, the current block is the last one; no
-#     further block is needed because the tail is already covered.
-#     (Using "while off < data_end" over-generates one extra block.)
+#   Rule 2 — Include every ADDR_STEP-aligned block that overlaps the data.
+#     data_end = index of last non-0xFF byte + 1.  A block at offset `off`
+#     overlaps data when off < data_end, so iterate while off < data_end.
+#     Short last chunks are padded with 0xFF; block size sent to ECU is
+#     always MAX_BLOCK so the bootloader CRC window is consistent.
 #
 #   Rule 3 — Block IDs count down from total_blocks to 1.
 #     Each block's ID is embedded in the EOB (end-of-block) frame.  The ECU
@@ -217,10 +217,8 @@ def build_blocks(firmware, patched_from, log_fn=None):
 
     offsets = []
     off = 0
-    while True:
+    while off < data_end:
         offsets.append(off)
-        if off + MAX_BLOCK >= data_end:   # this block covers the tail → stop
-            break
         off += ADDR_STEP
 
     total     = len(offsets)
@@ -228,16 +226,17 @@ def build_blocks(firmware, patched_from, log_fn=None):
 
     blocks = []
     for b_id, off in zip(block_ids, offsets):
-        size  = min(MAX_BLOCK, len(firmware) - off)
-        chunk = firmware[off:off + size]
+        chunk = firmware[off:off + MAX_BLOCK]
+        if len(chunk) < MAX_BLOCK:
+            chunk = chunk + b'\xFF' * (MAX_BLOCK - len(chunk))
         note  = f"  ← vectors patched from 0x{patched_from:08X}" \
                 if (off == 0 and patched_from) else ""
         if log_fn:
-            log_fn(f"    0x{ECU_FLASH_BASE + off:08X}  {size:5d} B  "
+            log_fn(f"    0x{ECU_FLASH_BASE + off:08X}  {MAX_BLOCK:5d} B  "
                    f"id=0x{b_id:02X}{note}")
         blocks.append({
             "addr":     ECU_FLASH_BASE + off,
-            "size":     size,
+            "size":     MAX_BLOCK,
             "data":     chunk,
             "block_id": b_id,
         })
