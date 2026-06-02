@@ -25,10 +25,11 @@ HEARTBEAT_INTERVAL = 0.101
 HEARTBEAT_COUNT    = 20
 ECU_WAKEUP_TIMEOUT = 3.0
 PAYLOAD_BYTES      = 6
-ERASE_TIMEOUT      = 2.0
-PROG_TIMEOUT       = 2.0
+ERASE_TIMEOUT      = 5.0   # ECU must erase 16 KB before ACKing; allow extra time
+PROG_TIMEOUT       = 5.0
 ACK_TIMEOUT        = 0.5
-LAST_FRAME_TIMEOUT = 0.5
+LAST_FRAME_TIMEOUT = 1.0
+INTER_BLOCK_DELAY  = 1.0   # wait after EOB ACK before next 04 INIT
 
 
 # ── Protocol helpers ──────────────────────────────────────────────────────────
@@ -395,6 +396,17 @@ class FlashWorker:
                 eob_pl = bytes([0x00, block["block_id"]]) + bytes(chunk[2:6])
                 self.send_and_wait(make_frame(0x00, eob_pl))
                 self.log(f"    Block done ✓")
+
+                # Give ECU time to write/verify flash before next 04 INIT.
+                # Send a heartbeat so the ECU sees activity during the wait.
+                is_last_block = (blk_idx == len(blocks) - 1)
+                if not is_last_block:
+                    time.sleep(INTER_BLOCK_DELAY)
+                    hb_msg = can.Message(
+                        arbitration_id=TOOL_ID, data=HEARTBEAT, is_extended_id=True
+                    )
+                    self.bus.send(hb_msg)
+                    time.sleep(0.1)
 
             # ── Phase 3: Program ──────────────────────────────────────────────
             self.log("\n[3/5] Program command (writing CRC to NVM)...")
