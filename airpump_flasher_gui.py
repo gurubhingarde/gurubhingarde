@@ -470,8 +470,8 @@ class App(tk.Tk):
                                     command=self._start_flash, width=18)
         self.flash_btn.pack(side="left")
 
-        self.abort_btn = ttk.Button(bg, text="Stop", command=self._abort,
-                                    state="disabled", width=8)
+        self.abort_btn = ttk.Button(bg, text="■  Stop", command=self._abort,
+                                    state="disabled", width=9)
         self.abort_btn.pack(side="left", padx=8)
 
         self.status_lbl = ttk.Label(bg, text="Ready", foreground="#a6e3a1",
@@ -505,8 +505,11 @@ class App(tk.Tk):
         self.console.tag_config("info",  foreground="#89dceb")
         self.console.tag_config("dim",   foreground="#6c7086")
 
-        clr = ttk.Button(root, text="Clear log", command=self._clear_log)
-        clr.pack(anchor="e", padx=12, pady=(0, 4))
+        bot = ttk.Frame(root)
+        bot.pack(fill="x", padx=12, pady=(0, 4))
+        ttk.Button(bot, text="Clear log", command=self._clear_log).pack(side="left")
+        ttk.Button(bot, text="Exit", command=self._exit,
+                   style="TButton").pack(side="right")
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -614,7 +617,19 @@ class App(tk.Tk):
     def _abort(self):
         if self.worker:
             self.worker.abort = True
-        self.status_lbl.configure(text="Aborting…", foreground="#f38ba8")
+        self.abort_btn.configure(state="disabled", text="Stopping…")
+        self.status_lbl.configure(text="Stopping…", foreground="#f38ba8")
+        # Worker will put -1 in progress_q when it exits, which re-enables Flash
+
+    def _exit(self):
+        if self.worker:
+            self.worker.abort = True
+        self.destroy()
+
+    def _reset_progress(self):
+        self.prog_var.set(0)
+        self.prog_bar.configure(style="green.Horizontal.TProgressbar")
+        self.status_lbl.configure(text="Ready", foreground="#a6e3a1")
 
     # ── Poll queues ───────────────────────────────────────────────────────────
 
@@ -626,11 +641,18 @@ class App(tk.Tk):
         # drain progress queue
         while not self.prog_q.empty():
             val = self.prog_q.get_nowait()
-            if val < 0:  # failure signal
+            if val < 0:  # failure / abort signal
                 self.prog_bar.configure(style="red.Horizontal.TProgressbar")
                 self.prog_var.set(100)
-                self.status_lbl.configure(text="Failed", foreground="#f38ba8")
+                was_aborted = self.worker and self.worker.abort
+                self.status_lbl.configure(
+                    text="Stopped" if was_aborted else "Failed",
+                    foreground="#f38ba8",
+                )
+                self.abort_btn.configure(text="■  Stop")
                 self._set_running(False)
+                # Reset progress bar to 0 after 2 s so UI is ready for re-flash
+                self.after(2000, self._reset_progress)
             else:
                 self.prog_var.set(val * 100)
                 if val >= 1.0:
