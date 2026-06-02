@@ -222,11 +222,18 @@ def build_blocks(firmware, patched_from, log_fn=None):
         offsets.append(off)
         off += ADDR_STEP
 
-    total     = len(offsets)
-    block_ids = list(range(total, 0, -1))  # [N, N-1, …, 2, 1]
+    total = len(offsets)
+
+    # Send blocks from HIGHEST address down to ECU_FLASH_BASE.
+    # The bootloader validates the image only when the base block (0x3E8000,
+    # which contains the ARM reset-vector) arrives.  Sending it first causes
+    # an immediate validity check on an incomplete image → ECU aborts.
+    # Reversed order: highest block first, base block last (id=1).
+    send_offsets = list(reversed(offsets))      # high→low address order
+    block_ids    = list(range(total, 0, -1))    # [N, N-1, …, 2, 1] in send order
 
     blocks = []
-    for b_id, off in zip(block_ids, offsets):
+    for b_id, off in zip(block_ids, send_offsets):
         chunk = firmware[off:off + MAX_BLOCK]
         if len(chunk) < MAX_BLOCK:
             chunk = chunk + b'\xFF' * (MAX_BLOCK - len(chunk))
