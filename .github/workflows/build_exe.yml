@@ -7,6 +7,9 @@ on:
       - '.github/workflows/build_exe.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -41,3 +44,14 @@ jobs:
           name: ECU_Flash_Tool_Windows
           path: dist/ECU_Flash_Tool.exe
           retention-days: 30
+
+      - name: Create or update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-build
+          name: ECU Flash Tool (latest build)
+          body: |
+            Latest Windows build of ECU Flash Tool.
+            Supports Air Pump and Oil Pump ECU flashing via PCAN-USB.
+          files: dist/ECU_Flash_Tool.exe
+          make_latest: true
