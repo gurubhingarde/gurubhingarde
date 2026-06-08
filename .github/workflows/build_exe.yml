@@ -1,0 +1,43 @@
+name: Build Windows EXE
+
+on:
+  push:
+    paths:
+      - 'ecu_flash_tool.py'
+      - '.github/workflows/build_exe.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller python-can
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --windowed --name "ECU_Flash_Tool" `
+            --hidden-import can.interfaces.pcan `
+            --hidden-import can.interfaces.socketcan `
+            --hidden-import can.interfaces.kvaser `
+            --hidden-import can.interfaces.vector `
+            --hidden-import can.interfaces.ixxat `
+            --hidden-import can.interfaces.virtual `
+            ecu_flash_tool.py
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ECU_Flash_Tool_Windows
+          path: dist/ECU_Flash_Tool.exe
+          retention-days: 30
