@@ -100,28 +100,19 @@ def load_hex(path):
 
 # ── Block builder ─────────────────────────────────────────────────────────────
 
+BLOCK_ID_BASE = ECU_FLASH_BASE + 6 * 0x2000  # 0x003F4000 — matches OEM block-id scheme
+
 def build_blocks(firmware, base_addr, log_fn=None):
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
+    blocks    = []
     total     = -(-len(firmware) // MAX_BLOCK)
-    raw_ids   = list(range(total + 1, 1, -1))
-    block_ids = [1 if x == 2 else x for x in raw_ids]
-    blocks = []
-
-    # If firmware starts above ECU_FLASH_BASE, erase the lower gap first so the
-    # ECU doesn't reject the new flash due to stale firmware sitting there.
-    erase_addr = ECU_FLASH_BASE
-    while erase_addr < base_addr:
-        if log_fn:
-            log_fn(f"    0x{erase_addr:08X}  {MAX_BLOCK:5d} B  id=0x00  (erase)")
-        blocks.append({"addr": erase_addr, "size": MAX_BLOCK,
-                        "data": bytes([0xFF] * MAX_BLOCK), "block_id": 0x00,
-                        "erase_only": True})
-        erase_addr += ADDR_STEP
-
     offset, addr = 0, base_addr
-    for b_id in block_ids:
-        chunk = firmware[offset:offset + MAX_BLOCK]
+    for i in range(total):
+        chunk   = firmware[offset:offset + MAX_BLOCK]
+        is_last = (i == total - 1)
+        # Block ID based on absolute flash address; last block always gets id=1
+        b_id    = 1 if is_last else (BLOCK_ID_BASE - addr) // ADDR_STEP
         if log_fn:
             log_fn(f"    0x{addr:08X}  {len(chunk):5d} B  id=0x{b_id:02X}")
         blocks.append({"addr": addr, "size": len(chunk),
@@ -175,6 +166,19 @@ class FlashWorker:
             rx = self.bus.recv(timeout=min(0.05, deadline - time.monotonic()))
             if rx and rx.arbitration_id == self.ecu_id and bytes(rx.data) == data:
                 return
+            if rx and rx.arbitration_id == 0x1800EEEE:
+                nak_data = bytes(rx.data)
+                self.log(f"  ⚠️  ECU NAK (0x1800EEEE): {nak_data.hex().upper()}")
+                raise RuntimeError(
+                    f"ECU rejected frame — address incompatible with current firmware.\n"
+                    f"  Sent   : {data.hex().upper()}\n"
+                    f"  ECU NAK: {nak_data.hex().upper()}\n"
+                    f"  Likely cause: hex file base address (0x{int.from_bytes(nak_data[0:4],'big'):08X}) "
+                    f"differs from firmware currently in ECU.\n"
+                    f"  The ECU bootloader only accepts reflashing at the same base address.\n"
+                    f"  Solution: use a hex file built for base address 0x003E8000, or obtain\n"
+                    f"  the correct production hex from the OEM."
+                )
         raise RuntimeError(f"No ACK for {data.hex().upper()}")
 
     def run(self):
@@ -248,10 +252,9 @@ class FlashWorker:
             for blk_idx, block in enumerate(blocks):
                 if self.abort:
                     raise RuntimeError("Aborted")
-                label = "  (erase only)" if block.get("erase_only") else ""
                 self.log(f"  Block {blk_idx+1}/{len(blocks)}  "
                          f"0x{block['addr']:08X}  {block['size']} B  "
-                         f"id=0x{block['block_id']:02X}{label}")
+                         f"id=0x{block['block_id']:02X}")
 
                 # 04 init
                 init_pl = addr_to_04_payload(block["addr"], block["size"])
