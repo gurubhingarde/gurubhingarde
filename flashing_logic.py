@@ -463,16 +463,8 @@ def _pump_addr_payload(full_addr, size):
     ])
 
 def _pump_load_hex(path):
-    """
-    Address-aware Intel HEX reader.
-    Returns (segments, crc_bytes, crc_addr, base_addr) where segments is a list of
-    (start_addr, data_bytes) tuples for each contiguous address region in the file.
-    This preserves non-aligned patch segments that a sequential reader would lose.
-
-    crc_bytes comes from the LAST 4 bytes of the sequential file stream (same as
-    the old sequential reader) — this is robust against files that have multiple
-    bc==4 records before the actual CRC record.
-    """
+    """Same sequential reader as the standalone air pump tool — proven to work
+    with all 3 firmware versions for both Air Pump and Oil Pump."""
     records = []
     with open(path) as f:
         for line in f:
@@ -485,8 +477,6 @@ def _pump_load_hex(path):
             data = bytes.fromhex(line[9:9 + bc * 2])
             records.append((bc, addr, rt, data))
 
-    # First pass: find CRC address and base address
-    # crc_addr = address of the LAST bc==4 data record (type-0 with 4 bytes)
     ela = 0
     crc_addr  = None
     base_addr = None
@@ -494,99 +484,43 @@ def _pump_load_hex(path):
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
-            full = ela | addr
             if bc == 4:
-                crc_addr = full
+                crc_addr = ela | addr
             if base_addr is None and bc > 4:
-                base_addr = full
+                base_addr = ela | addr
 
     if crc_addr is None:
         raise ValueError("No 4-byte CRC record found in hex file")
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
-    # Build address map AND sequential stream simultaneously
-    addr_map = {}
     seq = bytearray()
     ela = 0
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
-            full = ela | addr
-            for i, b in enumerate(data):
-                addr_map[full + i] = b
             seq += data
         elif rt == 1:
             break
 
-    # CRC bytes from sequential tail — robust: works even when multiple bc==4
-    # records exist before the actual CRC (which is always last data in file)
     crc_bytes = bytes(seq[-4:])
-
-    # Remove CRC from addr_map so it stays out of firmware segments
-    for i in range(4):
-        addr_map.pop(crc_addr + i, None)
-
-    # Identify contiguous segments (address gap = discontinuity)
-    segments = []
-    if addr_map:
-        sorted_addrs = sorted(addr_map.keys())
-        seg_start = sorted_addrs[0]
-        seg_data  = bytearray()
-        prev_addr = sorted_addrs[0] - 1
-        for a in sorted_addrs:
-            if a != prev_addr + 1:
-                if seg_data:
-                    segments.append((seg_start, bytes(seg_data)))
-                seg_start = a
-                seg_data  = bytearray()
-            seg_data.append(addr_map[a])
-            prev_addr = a
-        if seg_data:
-            segments.append((seg_start, bytes(seg_data)))
-
-    return segments, crc_bytes, crc_addr, base_addr
+    firmware  = bytes(seq[:-4])
+    return firmware, crc_bytes, crc_addr, base_addr
 
 
-def _pump_build_blocks(segments):
-    """
-    Build flash blocks from a list of (addr, data) segments.
-
-    Block-id rules (reverse-engineered from OEM traces):
-      - Aligned + full (== MAX_BLOCK) : id = (BLOCK_ID_BASE - addr) // ADDR_STEP
-      - Aligned + partial (< MAX_BLOCK): id = formula + 1
-      - Non-aligned (patch offset)     : id = formula on floor(addr, ADDR_STEP)
-      - Last block overall             : id = 1  (always)
-    """
-    ADDR_STEP = _PUMP_ADDR_STEP  # 0x2000
-    MAX_BLOCK = _PUMP_MAX_BLOCK  # 0x4000
-
+def _pump_build_blocks(firmware, base_addr):
+    """Same block builder as the standalone air pump tool."""
     blocks = []
-    for seg_addr, seg_data in segments:
-        offset = 0
-        addr   = seg_addr
-        while offset < len(seg_data):
-            chunk   = seg_data[offset:offset + MAX_BLOCK]
-            is_full = (len(chunk) == MAX_BLOCK)
-            aligned = (addr % ADDR_STEP == 0)
-
-            if aligned and is_full:
-                b_id = (_PUMP_BLOCK_ID_BASE - addr) // ADDR_STEP
-            elif aligned:
-                b_id = (_PUMP_BLOCK_ID_BASE - addr) // ADDR_STEP + 1
-            else:
-                floor_addr = (addr // ADDR_STEP) * ADDR_STEP
-                b_id = (_PUMP_BLOCK_ID_BASE - floor_addr) // ADDR_STEP
-
-            blocks.append({"addr": addr, "size": len(chunk), "data": chunk, "block_id": b_id})
-            offset += MAX_BLOCK
-            addr   += ADDR_STEP
-
-    # Last block always gets id=1
-    if blocks:
-        blocks[-1]["block_id"] = 1
-
+    total  = -(-len(firmware) // _PUMP_MAX_BLOCK)
+    offset, addr = 0, base_addr
+    for i in range(total):
+        chunk   = firmware[offset:offset + _PUMP_MAX_BLOCK]
+        is_last = (i == total - 1)
+        b_id    = 1 if is_last else (_PUMP_BLOCK_ID_BASE - addr) // _PUMP_ADDR_STEP
+        blocks.append({"addr": addr, "size": len(chunk), "data": chunk, "block_id": b_id})
+        offset += _PUMP_MAX_BLOCK
+        addr   += _PUMP_ADDR_STEP
     return blocks
 
 
@@ -644,18 +578,17 @@ class PumpFlashingLogic:
         # ── Load hex ────────────────────────────────────────────────────────
         self.log_write("Loading hex file...")
         try:
-            segments, crc_bytes, crc_addr, base_addr = _pump_load_hex(firmware_path)
+            firmware, crc_bytes, crc_addr, base_addr = _pump_load_hex(firmware_path)
         except Exception as e:
             self.log_write(f"❌ Error loading hex: {e}")
             return False
 
-        crc_int   = int.from_bytes(crc_bytes, "big")
-        total_seg = sum(len(d) for _, d in segments)
-        self.log_write(f"  Segments : {len(segments)} ({total_seg:,} bytes total)")
+        crc_int = int.from_bytes(crc_bytes, "big")
+        self.log_write(f"  Firmware : {len(firmware):,} bytes")
         self.log_write(f"  Base addr: 0x{base_addr:08X}")
         self.log_write(f"  CRC      : 0x{crc_int:08X}  at 0x{crc_addr:08X}")
 
-        blocks = _pump_build_blocks(segments)
+        blocks = _pump_build_blocks(firmware, base_addr)
         self.log_write(f"  Blocks   : {len(blocks)}")
         for b in blocks:
             self.log_write(f"    0x{b['addr']:08X}  {b['size']:5d} B  id=0x{b['block_id']:02X}")
