@@ -22,9 +22,9 @@ PUMP_TYPES = {
 }
 BCAST_ID = 0x1800FFFF
 
-HEARTBEAT_INTERVAL = 0.101
-HEARTBEAT_COUNT    = 20
-ECU_WAKEUP_TIMEOUT = 3.0
+HEARTBEAT_INTERVAL  = 0.101
+HEARTBEAT_COUNT     = 60    # ~6 s — long enough for live ECU app to detect & reboot into bootloader
+ECU_WAKEUP_TIMEOUT  = 3.0   # extra wait after last heartbeat if ECU hasn't responded yet
 PAYLOAD_BYTES      = 6
 ERASE_TIMEOUT      = 5.0
 PROG_TIMEOUT       = 5.0
@@ -227,28 +227,58 @@ class FlashWorker:
             # Heartbeat byte[2] encodes the expected base address so the ECU
             # unlocks the correct flash region for the upcoming session.
             # Formula matches OEM: byte[2] = (BLOCK_ID_BASE - base_addr)/ADDR_STEP + 1
+            #
+            # Two flash modes are supported:
+            #   Cold-start: ECU powered on while tool is running → bootloader responds
+            #               within the first few heartbeats (~1-2 s)
+            #   Live:       ECU app already running → app detects heartbeats, triggers
+            #               software reset into bootloader → responds after ~3-6 s
+            # We send up to HEARTBEAT_COUNT heartbeats but stop as soon as ECU responds,
+            # so cold-start flashing stays fast.
             hb_byte = (BLOCK_ID_BASE - base_addr) // 0x2000 + 1
             hb_data = make_frame(0x00, bytes([0x00, hb_byte, 0x00, 0x00, 0x00, 0x00]))
             self.log("\n[1/5] Keepalive — waking ECU...")
             self.log(f"  Heartbeat byte: 0x{hb_byte:02X}  (base 0x{base_addr:08X})")
-            hb_msg = can.Message(arbitration_id=self.tool_id, data=hb_data, is_extended_id=True)
+            self.log(f"  Waiting up to {HEARTBEAT_COUNT * HEARTBEAT_INTERVAL:.0f} s "
+                     f"(works with powered-on ECU or live ECU app)...")
+            hb_msg  = can.Message(arbitration_id=self.tool_id, data=hb_data, is_extended_id=True)
+            ecu_woke = False
+            hb_sent  = 0
             for i in range(HEARTBEAT_COUNT):
                 if self.abort:
                     raise RuntimeError("Aborted")
                 self.bus.send(hb_msg)
-                time.sleep(HEARTBEAT_INTERVAL)
+                hb_sent += 1
                 self.progress(0.01 * i / HEARTBEAT_COUNT)
-
-            deadline = time.monotonic() + ECU_WAKEUP_TIMEOUT
-            while time.monotonic() < deadline:
-                if self.abort:
-                    raise RuntimeError("Aborted")
-                rx = self.bus.recv(timeout=0.2)
+                # Check for ECU response after each heartbeat (non-blocking 80 ms window)
+                rx = self.bus.recv(timeout=0.08)
                 if rx and rx.arbitration_id == self.ecu_id:
+                    elapsed = hb_sent * HEARTBEAT_INTERVAL
+                    mode = "live ECU → rebooted to bootloader" if hb_sent > 15 else "bootloader / cold-start"
                     self.log(f"  ECU responded ✓  ({bytes(rx.data).hex().upper()})")
+                    self.log(f"  Mode detected : {mode}  (after {hb_sent} heartbeats, ~{elapsed:.1f} s)")
+                    ecu_woke = True
                     break
-            else:
-                raise RuntimeError("ECU did not respond to keepalive")
+                time.sleep(max(0, HEARTBEAT_INTERVAL - 0.08))
+
+            if not ecu_woke:
+                # Give a short extra window in case response arrives just after last heartbeat
+                deadline = time.monotonic() + ECU_WAKEUP_TIMEOUT
+                while time.monotonic() < deadline:
+                    if self.abort:
+                        raise RuntimeError("Aborted")
+                    rx = self.bus.recv(timeout=0.2)
+                    if rx and rx.arbitration_id == self.ecu_id:
+                        self.log(f"  ECU responded ✓  ({bytes(rx.data).hex().upper()})")
+                        ecu_woke = True
+                        break
+
+            if not ecu_woke:
+                raise RuntimeError(
+                    "ECU did not respond to keepalive.\n"
+                    "  • For cold-start: power on ECU while tool is running\n"
+                    "  • For live flash : ECU app must be running before clicking Flash"
+                )
 
             # ── Phase 2: Flash blocks ─────────────────────────────────────────
             self.log(f"\n[2/5] Flashing {len(blocks)} blocks...")
