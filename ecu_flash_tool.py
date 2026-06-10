@@ -106,7 +106,20 @@ def build_blocks(firmware, base_addr, log_fn=None):
     total     = -(-len(firmware) // MAX_BLOCK)
     raw_ids   = list(range(total + 1, 1, -1))
     block_ids = [1 if x == 2 else x for x in raw_ids]
-    blocks, offset, addr = [], 0, base_addr  # start from hex file's base address
+    blocks = []
+
+    # If firmware starts above ECU_FLASH_BASE, erase the lower gap first so the
+    # ECU doesn't reject the new flash due to stale firmware sitting there.
+    erase_addr = ECU_FLASH_BASE
+    while erase_addr < base_addr:
+        if log_fn:
+            log_fn(f"    0x{erase_addr:08X}  {MAX_BLOCK:5d} B  id=0x00  (erase)")
+        blocks.append({"addr": erase_addr, "size": MAX_BLOCK,
+                        "data": bytes([0xFF] * MAX_BLOCK), "block_id": 0x00,
+                        "erase_only": True})
+        erase_addr += ADDR_STEP
+
+    offset, addr = 0, base_addr
     for b_id in block_ids:
         chunk = firmware[offset:offset + MAX_BLOCK]
         if log_fn:
@@ -228,9 +241,10 @@ class FlashWorker:
             for blk_idx, block in enumerate(blocks):
                 if self.abort:
                     raise RuntimeError("Aborted")
+                label = "  (erase only)" if block.get("erase_only") else ""
                 self.log(f"  Block {blk_idx+1}/{len(blocks)}  "
                          f"0x{block['addr']:08X}  {block['size']} B  "
-                         f"id=0x{block['block_id']:02X}")
+                         f"id=0x{block['block_id']:02X}{label}")
 
                 init_pl = addr_to_04_payload(block["addr"], block["size"])
                 self.send_and_wait(make_frame(0x04, init_pl), timeout=ERASE_TIMEOUT)
