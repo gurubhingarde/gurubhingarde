@@ -22,7 +22,6 @@ PUMP_TYPES = {
 }
 BCAST_ID = 0x1800FFFF
 
-HEARTBEAT          = bytes([0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x07])
 HEARTBEAT_INTERVAL = 0.101
 HEARTBEAT_COUNT    = 20
 ECU_WAKEUP_TIMEOUT = 3.0
@@ -225,8 +224,14 @@ class FlashWorker:
             self.log("  CAN bus open ✓")
 
             # ── Phase 1: Keepalive ────────────────────────────────────────────
+            # Heartbeat byte[2] encodes the expected base address so the ECU
+            # unlocks the correct flash region for the upcoming session.
+            # Formula matches OEM: byte[2] = (BLOCK_ID_BASE - base_addr)/ADDR_STEP + 1
+            hb_byte = (BLOCK_ID_BASE - base_addr) // 0x2000 + 1
+            hb_data = make_frame(0x00, bytes([0x00, hb_byte, 0x00, 0x00, 0x00, 0x00]))
             self.log("\n[1/5] Keepalive — waking ECU...")
-            hb_msg = can.Message(arbitration_id=self.tool_id, data=HEARTBEAT, is_extended_id=True)
+            self.log(f"  Heartbeat byte: 0x{hb_byte:02X}  (base 0x{base_addr:08X})")
+            hb_msg = can.Message(arbitration_id=self.tool_id, data=hb_data, is_extended_id=True)
             for i in range(HEARTBEAT_COUNT):
                 if self.abort:
                     raise RuntimeError("Aborted")
