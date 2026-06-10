@@ -23,8 +23,8 @@ PUMP_TYPES = {
 BCAST_ID = 0x1800FFFF
 
 HEARTBEAT_INTERVAL  = 0.101
-HEARTBEAT_COUNT     = 60    # ~6 s — long enough for live ECU app to detect & reboot into bootloader
-ECU_WAKEUP_TIMEOUT  = 3.0   # extra wait after last heartbeat if ECU hasn't responded yet
+HEARTBEAT_COUNT     = 60
+ECU_WAKEUP_TIMEOUT  = 3.0
 PAYLOAD_BYTES      = 6
 ERASE_TIMEOUT      = 5.0
 PROG_TIMEOUT       = 5.0
@@ -51,8 +51,15 @@ def verify_frame(data):
 # ── Hex loader ────────────────────────────────────────────────────────────────
 
 ECU_FLASH_BASE = 0x003E8000
+BLOCK_ID_BASE  = ECU_FLASH_BASE + 6 * 0x2000  # 0x003F4000
+
 
 def load_hex(path):
+    """
+    Address-aware Intel HEX reader.
+    Returns (segments, crc_bytes, crc_addr, base_addr) where segments is a list of
+    (start_addr, data_bytes) tuples for each contiguous address region in the file.
+    """
     records = []
     with open(path) as f:
         for line in f:
@@ -72,51 +79,97 @@ def load_hex(path):
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
+            full = ela | addr
             if bc == 4:
-                crc_addr = ela | addr
+                crc_addr = full
             if base_addr is None and bc > 4:
-                base_addr = ela | addr
+                base_addr = full
 
     if crc_addr is None:
         raise ValueError("No 4-byte CRC record found in hex file")
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
+    # Build address map AND sequential stream together
+    addr_map = {}
     seq = bytearray()
     ela = 0
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
+            full = ela | addr
+            for i, b in enumerate(data):
+                addr_map[full + i] = b
             seq += data
         elif rt == 1:
             break
 
+    # CRC bytes from sequential tail — robust against multiple bc==4 records in file
     crc_bytes = bytes(seq[-4:])
-    firmware  = bytes(seq[:-4])
-    return firmware, crc_bytes, crc_addr, base_addr
+    for i in range(4):
+        addr_map.pop(crc_addr + i, None)
+
+    segments = []
+    if addr_map:
+        sorted_addrs = sorted(addr_map.keys())
+        seg_start = sorted_addrs[0]
+        seg_data  = bytearray()
+        prev_addr = sorted_addrs[0] - 1
+        for a in sorted_addrs:
+            if a != prev_addr + 1:
+                if seg_data:
+                    segments.append((seg_start, bytes(seg_data)))
+                seg_start = a
+                seg_data  = bytearray()
+            seg_data.append(addr_map[a])
+            prev_addr = a
+        if seg_data:
+            segments.append((seg_start, bytes(seg_data)))
+
+    return segments, crc_bytes, crc_addr, base_addr
 
 
 # ── Block builder ─────────────────────────────────────────────────────────────
 
-BLOCK_ID_BASE = ECU_FLASH_BASE + 6 * 0x2000  # 0x003F4000
+def build_blocks(segments, log_fn=None):
+    """
+    Build flash blocks from (addr, data) segments, preserving non-aligned patches.
 
-def build_blocks(firmware, base_addr, log_fn=None):
+    Block-id rules (reverse-engineered from OEM traces):
+      - Aligned + full (== 16 KB) : id = (BLOCK_ID_BASE - addr) // 8KB
+      - Aligned + partial         : id = formula + 1
+      - Non-aligned (patch)       : id = formula on floor(addr, 8KB)
+      - Last block overall        : id = 1
+    """
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
     blocks    = []
-    total     = -(-len(firmware) // MAX_BLOCK)
-    offset, addr = 0, base_addr
-    for i in range(total):
-        chunk   = firmware[offset:offset + MAX_BLOCK]
-        is_last = (i == total - 1)
-        b_id    = 1 if is_last else (BLOCK_ID_BASE - addr) // ADDR_STEP
-        if log_fn:
-            log_fn(f"    0x{addr:08X}  {len(chunk):5d} B  id=0x{b_id:02X}")
-        blocks.append({"addr": addr, "size": len(chunk),
-                        "data": chunk, "block_id": b_id})
-        offset += MAX_BLOCK
-        addr   += ADDR_STEP
+    for seg_addr, seg_data in segments:
+        offset = 0
+        addr   = seg_addr
+        while offset < len(seg_data):
+            chunk   = seg_data[offset:offset + MAX_BLOCK]
+            is_full = (len(chunk) == MAX_BLOCK)
+            aligned = (addr % ADDR_STEP == 0)
+
+            if aligned and is_full:
+                b_id = (BLOCK_ID_BASE - addr) // ADDR_STEP
+            elif aligned:
+                b_id = (BLOCK_ID_BASE - addr) // ADDR_STEP + 1
+            else:
+                floor_addr = (addr // ADDR_STEP) * ADDR_STEP
+                b_id = (BLOCK_ID_BASE - floor_addr) // ADDR_STEP
+
+            if log_fn:
+                log_fn(f"    0x{addr:08X}  {len(chunk):5d} B  id=0x{b_id:02X}")
+            blocks.append({"addr": addr, "size": len(chunk),
+                            "data": chunk, "block_id": b_id})
+            offset += MAX_BLOCK
+            addr   += ADDR_STEP
+
+    if blocks:
+        blocks[-1]["block_id"] = 1
     return blocks
 
 def addr_to_04_payload(full_addr, size):
@@ -139,10 +192,10 @@ class FlashWorker:
         self.channel    = channel
         self.bitrate    = bitrate
         self.hex_path   = hex_path
-        self.log_q      = log_q      # queue for log messages (str)
+        self.log_q      = log_q
         self.tool_id    = tool_id
         self.ecu_id     = ecu_id
-        self.progress_q = progress_q # queue for progress (0.0–1.0)
+        self.progress_q = progress_q
         self.bus        = None
         self.abort      = False
 
@@ -150,7 +203,7 @@ class FlashWorker:
         self.log_q.put(msg)
 
     def progress(self, val):
-        self.progress_q.put(val)  # negative = failure sentinel, pass through as-is
+        self.progress_q.put(val)
 
     def send_and_wait(self, data, timeout=ACK_TIMEOUT):
         assert verify_frame(data)
@@ -160,7 +213,6 @@ class FlashWorker:
         while time.monotonic() < deadline:
             if self.abort:
                 raise RuntimeError("Aborted by user")
-            # Cap recv at 50 ms so the abort flag is checked frequently
             rx = self.bus.recv(timeout=min(0.05, deadline - time.monotonic()))
             if rx and rx.arbitration_id == self.ecu_id and bytes(rx.data) == data:
                 return
@@ -181,24 +233,20 @@ class FlashWorker:
 
     def run(self):
         try:
-            # ── Parse hex ────────────────────────────────────────────────────
             self.log("Loading hex file...")
             self.log(f"  Tool ID  : 0x{self.tool_id:08X}  ECU ID: 0x{self.ecu_id:08X}")
-            firmware, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
-            crc_int = int.from_bytes(crc_bytes, "big")
-            self.log(f"  Firmware : {len(firmware):,} bytes")
+            segments, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
+            crc_int   = int.from_bytes(crc_bytes, "big")
+            total_seg = sum(len(d) for _, d in segments)
+            self.log(f"  Segments : {len(segments)} ({total_seg:,} bytes total)")
             self.log(f"  Base addr: 0x{base_addr:08X}")
-            self.log(f"  CRC      : 0x{crc_int:08X}")
-            self.log(f"  CRC addr : 0x{crc_addr:08X}")
+            self.log(f"  CRC      : 0x{crc_int:08X}  at 0x{crc_addr:08X}")
 
             self.log(f"  Blocks:")
-            blocks = build_blocks(firmware, base_addr, log_fn=self.log)
+            blocks = build_blocks(segments, log_fn=self.log)
 
-            total_frames = sum(
-                -(-b["size"] // PAYLOAD_BYTES) for b in blocks
-            )
+            total_frames = sum(-(-b["size"] // PAYLOAD_BYTES) for b in blocks)
 
-            # ── Open CAN ─────────────────────────────────────────────────────
             self.log(f"\nOpening CAN: {self.interface} / {self.channel} @ {self.bitrate} bps")
             try:
                 self.bus = can.interface.Bus(
@@ -222,18 +270,6 @@ class FlashWorker:
                 raise RuntimeError(f"Cannot open CAN bus: {e}{hint}") from None
             self.log("  CAN bus open ✓")
 
-            # ── Phase 1: Keepalive ────────────────────────────────────────────
-            # Heartbeat byte[2] encodes the expected base address so the ECU
-            # unlocks the correct flash region for the upcoming session.
-            # Formula matches OEM: byte[2] = (BLOCK_ID_BASE - base_addr)/ADDR_STEP + 1
-            #
-            # Two flash modes are supported:
-            #   Cold-start: ECU powered on while tool is running → bootloader responds
-            #               within the first few heartbeats (~1-2 s)
-            #   Live:       ECU app already running → app detects heartbeats, triggers
-            #               software reset into bootloader → responds after ~3-6 s
-            # We send up to HEARTBEAT_COUNT heartbeats but stop as soon as ECU responds,
-            # so cold-start flashing stays fast.
             hb_byte = (BLOCK_ID_BASE - base_addr) // 0x2000 + 1
             hb_data = make_frame(0x00, bytes([0x00, hb_byte, 0x00, 0x00, 0x00, 0x00]))
             self.log("\n[1/5] Keepalive — waking ECU...")
@@ -249,7 +285,6 @@ class FlashWorker:
                 self.bus.send(hb_msg)
                 hb_sent += 1
                 self.progress(0.01 * i / HEARTBEAT_COUNT)
-                # Check for ECU response after each heartbeat (non-blocking 80 ms window)
                 rx = self.bus.recv(timeout=0.08)
                 if rx and rx.arbitration_id == self.ecu_id:
                     elapsed = hb_sent * HEARTBEAT_INTERVAL
@@ -261,7 +296,6 @@ class FlashWorker:
                 time.sleep(max(0, HEARTBEAT_INTERVAL - 0.08))
 
             if not ecu_woke:
-                # Give a short extra window in case response arrives just after last heartbeat
                 deadline = time.monotonic() + ECU_WAKEUP_TIMEOUT
                 while time.monotonic() < deadline:
                     if self.abort:
@@ -279,7 +313,6 @@ class FlashWorker:
                     "  • For live flash : ECU app must be running before clicking Flash"
                 )
 
-            # ── Phase 2: Flash blocks ─────────────────────────────────────────
             self.log(f"\n[2/5] Flashing {len(blocks)} blocks...")
             frames_done = 0
 
@@ -290,12 +323,10 @@ class FlashWorker:
                          f"0x{block['addr']:08X}  {block['size']} B  "
                          f"id=0x{block['block_id']:02X}")
 
-                # 04 init
                 init_pl = addr_to_04_payload(block["addr"], block["size"])
                 self.send_and_wait(make_frame(0x04, init_pl), timeout=ERASE_TIMEOUT)
                 self.log(f"    Erase ACK ✓")
 
-                # data frames
                 toggle  = 0x01
                 data    = block["data"]
                 n       = -(-block["size"] // PAYLOAD_BYTES)
@@ -306,9 +337,6 @@ class FlashWorker:
                     if self.abort:
                         raise RuntimeError("Aborted")
                     chunk = data[offset:offset + PAYLOAD_BYTES]
-                    # Pad only if firmware doesn't divide evenly (last frame),
-                    # using 0xFF (= erased flash value). Do NOT force FF FF —
-                    # those two bytes are real firmware data in every block.
                     if len(chunk) < PAYLOAD_BYTES:
                         chunk = chunk.ljust(PAYLOAD_BYTES, b'\xFF')
                     is_last = (fi == n - 1)
@@ -319,32 +347,27 @@ class FlashWorker:
                     frames_done += 1
                     self.progress(0.05 + 0.85 * frames_done / total_frames)
 
-                # end-of-block
                 eob_pl = bytes([0x00, block["block_id"]]) + bytes(chunk[2:6])
                 self.send_and_wait(make_frame(0x00, eob_pl))
                 self.log(f"    Block done ✓")
 
-            # ── Phase 3: Program ──────────────────────────────────────────────
             self.log("\n[3/5] Program command (writing CRC to NVM)...")
             prog_pl = addr_to_04_payload(crc_addr, 4)
             self.send_and_wait(make_frame(0x04, prog_pl), timeout=PROG_TIMEOUT)
             self.log("  Program ACK ✓")
             self.progress(0.93)
 
-            # ── Phase 4: Verify ───────────────────────────────────────────────
             self.log("\n[4/5] Verify...")
             crc_pl = bytes([0x00]) + crc_bytes[1:4] + bytes([0xFF, 0xFF])
             self.send_and_wait(make_frame(0x01, crc_pl))
             self.log("  Verify ACK ✓")
             self.progress(0.96)
 
-            # ── Phase 5: Close ────────────────────────────────────────────────
             self.log("\n[5/5] Close session...")
             self.send_and_wait(make_frame(0x03, crc_pl), timeout=0.5)
             self.log("  Close ACK ✓")
             self.progress(0.99)
 
-            # Broadcast
             deadline = time.monotonic() + 2.0
             while time.monotonic() < deadline:
                 rx = self.bus.recv(timeout=0.2)
@@ -358,7 +381,7 @@ class FlashWorker:
         except Exception as e:
             self.log(f"\n❌  ERROR: {e}")
         finally:
-            self.progress(-1)   # always signal UI to re-enable Flash button
+            self.progress(-1)
             if self.bus:
                 self.bus.shutdown()
 
@@ -388,11 +411,6 @@ BITRATES = ["125000", "250000", "500000", "1000000"]
 
 
 def detect_pcan_channels():
-    """
-    Probe every PCAN_USBBUS1..8 channel at 500k to find which ones are
-    physically present.  Returns a list of working channel names.
-    Works on Windows (Peak driver) and Linux (SocketCAN peak_usb).
-    """
     found = []
     try:
         import can
@@ -421,8 +439,6 @@ class App(tk.Tk):
         self.prog_q    = queue.Queue()
         self._build_ui()
         self._poll()
-
-    # ── UI build ──────────────────────────────────────────────────────────────
 
     def _build_ui(self):
         PAD  = dict(padx=12, pady=6)
@@ -458,7 +474,6 @@ class App(tk.Tk):
         root = ttk.Frame(self, padding=16)
         root.pack(fill="both", expand=True)
 
-        # ── Pump type ─────────────────────────────────────────────────────────
         pg = ttk.LabelFrame(root, text=" Pump Type ", padding=10)
         pg.pack(fill="x", **PAD)
 
@@ -469,14 +484,12 @@ class App(tk.Tk):
                 style="TRadiobutton",
             ).pack(side="left", padx=16)
 
-        # style radio buttons to match dark theme
         style.configure("TRadiobutton", background="#1e1e2e", foreground="#cdd6f4",
                         font=("Segoe UI", 10))
         style.map("TRadiobutton",
                   background=[("active", "#1e1e2e")],
                   foreground=[("active", "#89b4fa")])
 
-        # ── Hex file ──────────────────────────────────────────────────────────
         fg = ttk.LabelFrame(root, text=" Firmware File ", padding=10)
         fg.pack(fill="x", **PAD)
 
@@ -485,7 +498,6 @@ class App(tk.Tk):
                   font=("Segoe UI", 10)).pack(side="left", padx=(0, 8))
         ttk.Button(fg, text="Browse…", command=self._browse).pack(side="left")
 
-        # ── CAN settings ──────────────────────────────────────────────────────
         cg = ttk.LabelFrame(root, text=" CAN Settings ", padding=10)
         cg.pack(fill="x", **PAD)
 
@@ -514,7 +526,6 @@ class App(tk.Tk):
         ttk.Combobox(row1, textvariable=self.baud_var,
                      values=BITRATES, width=10, state="readonly").pack(side="left", padx=6)
 
-        # ── Flash button + progress ───────────────────────────────────────────
         bg = ttk.Frame(root)
         bg.pack(fill="x", **CPAD)
 
@@ -537,7 +548,6 @@ class App(tk.Tk):
                                          length=520)
         self.prog_bar.pack(fill="x", **CPAD)
 
-        # ── Log console ───────────────────────────────────────────────────────
         lg = ttk.LabelFrame(root, text=" Log ", padding=6)
         lg.pack(fill="both", expand=True, **PAD)
 
@@ -551,7 +561,6 @@ class App(tk.Tk):
         )
         self.console.pack(fill="both", expand=True)
 
-        # colour tags
         self.console.tag_config("ok",    foreground="#a6e3a1")
         self.console.tag_config("err",   foreground="#f38ba8")
         self.console.tag_config("info",  foreground="#89dceb")
@@ -560,10 +569,7 @@ class App(tk.Tk):
         bot = ttk.Frame(root)
         bot.pack(fill="x", padx=12, pady=(0, 4))
         ttk.Button(bot, text="Clear log", command=self._clear_log).pack(side="left")
-        ttk.Button(bot, text="Exit", command=self._exit,
-                   style="TButton").pack(side="right")
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
+        ttk.Button(bot, text="Exit", command=self._exit).pack(side="right")
 
     def _browse(self):
         path = filedialog.askopenfilename(
@@ -578,14 +584,12 @@ class App(tk.Tk):
         channels = DEFAULT_CHANNELS.get(iface, ["0"])
         self.chan_cb["values"] = channels
         self.chan_var.set(channels[0])
-        # only show Detect button for PCAN
         if iface == "pcan":
             self.detect_btn.pack(side="left", padx=(0, 18))
         else:
             self.detect_btn.pack_forget()
 
     def _detect_channels(self):
-        """Probe PCAN USB channels and populate the dropdown."""
         self.detect_btn.configure(state="disabled", text="Scanning…")
         self.status_lbl.configure(text="Detecting…", foreground="#fab387")
         self.update_idletasks()
@@ -639,8 +643,6 @@ class App(tk.Tk):
         self.flash_btn.configure(state="disabled" if running else "normal")
         self.abort_btn.configure(state="normal"   if running else "disabled")
 
-    # ── Flash start/stop ──────────────────────────────────────────────────────
-
     def _start_flash(self):
         path = self.hex_var.get().strip()
         if not path:
@@ -671,7 +673,6 @@ class App(tk.Tk):
             self.worker.abort = True
         self.abort_btn.configure(state="disabled", text="Stopping…")
         self.status_lbl.configure(text="Stopping…", foreground="#f38ba8")
-        # Safety net: if worker doesn't signal within 3 s, force-reset the UI
         self.after(3000, self._force_reset_if_stopping)
 
     def _exit(self):
@@ -685,25 +686,18 @@ class App(tk.Tk):
         self.status_lbl.configure(text="Ready", foreground="#a6e3a1")
 
     def _force_reset_if_stopping(self):
-        """Called 3 s after Stop is pressed. If the UI is still stuck in
-        Stopping state (worker didn't signal), reset everything manually."""
         if self.status_lbl.cget("text") in ("Stopping…", "Aborting…"):
             self.abort_btn.configure(text="■  Stop")
             self._set_running(False)
             self._reset_progress()
 
-    # ── Poll queues ───────────────────────────────────────────────────────────
-
     def _poll(self):
-        # drain log queue
         while not self.log_q.empty():
             self._log(self.log_q.get_nowait())
 
-        # drain progress queue
         while not self.prog_q.empty():
             val = self.prog_q.get_nowait()
-            if val < 0:  # failure / abort sentinel from finally block
-                # Ignore if flash already completed successfully
+            if val < 0:
                 if self.status_lbl.cget("text") == "Done ✓":
                     continue
                 self.prog_bar.configure(style="red.Horizontal.TProgressbar")
@@ -715,7 +709,6 @@ class App(tk.Tk):
                 )
                 self.abort_btn.configure(text="■  Stop")
                 self._set_running(False)
-                # Reset progress bar to 0 after 2 s so UI is ready for re-flash
                 self.after(2000, self._reset_progress)
             else:
                 self.prog_var.set(min(val, 1.0) * 100)
@@ -725,8 +718,6 @@ class App(tk.Tk):
 
         self.after(80, self._poll)
 
-
-# ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     app = App()
