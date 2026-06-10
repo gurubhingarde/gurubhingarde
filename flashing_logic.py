@@ -466,8 +466,12 @@ def _pump_load_hex(path):
     """
     Address-aware Intel HEX reader.
     Returns (segments, crc_bytes, crc_addr, base_addr) where segments is a list of
-    (start_addr, data_bytes) tuples for each contiguous block in the file.
+    (start_addr, data_bytes) tuples for each contiguous address region in the file.
     This preserves non-aligned patch segments that a sequential reader would lose.
+
+    crc_bytes comes from the LAST 4 bytes of the sequential file stream (same as
+    the old sequential reader) — this is robust against files that have multiple
+    bc==4 records before the actual CRC record.
     """
     records = []
     with open(path) as f:
@@ -482,6 +486,7 @@ def _pump_load_hex(path):
             records.append((bc, addr, rt, data))
 
     # First pass: find CRC address and base address
+    # crc_addr = address of the LAST bc==4 data record (type-0 with 4 bytes)
     ela = 0
     crc_addr  = None
     base_addr = None
@@ -500,8 +505,9 @@ def _pump_load_hex(path):
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
-    # Second pass: build address map
+    # Build address map AND sequential stream simultaneously
     addr_map = {}
+    seq = bytearray()
     ela = 0
     for bc, addr, rt, data in records:
         if rt == 4:
@@ -510,11 +516,15 @@ def _pump_load_hex(path):
             full = ela | addr
             for i, b in enumerate(data):
                 addr_map[full + i] = b
+            seq += data
         elif rt == 1:
             break
 
-    # Extract and remove CRC bytes
-    crc_bytes = bytes([addr_map.get(crc_addr + i, 0xFF) for i in range(4)])
+    # CRC bytes from sequential tail — robust: works even when multiple bc==4
+    # records exist before the actual CRC (which is always last data in file)
+    crc_bytes = bytes(seq[-4:])
+
+    # Remove CRC from addr_map so it stays out of firmware segments
     for i in range(4):
         addr_map.pop(crc_addr + i, None)
 

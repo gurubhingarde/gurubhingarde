@@ -90,8 +90,9 @@ def load_hex(path):
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
-    # Build address map
+    # Build address map AND sequential stream simultaneously
     addr_map = {}
+    seq = bytearray()
     ela = 0
     for bc, addr, rt, data in records:
         if rt == 4:
@@ -100,11 +101,12 @@ def load_hex(path):
             full = ela | addr
             for i, b in enumerate(data):
                 addr_map[full + i] = b
+            seq += data
         elif rt == 1:
             break
 
-    # Extract and remove CRC
-    crc_bytes = bytes([addr_map.get(crc_addr + i, 0xFF) for i in range(4)])
+    # CRC from sequential tail — robust against multiple bc==4 records in file
+    crc_bytes = bytes(seq[-4:])
     for i in range(4):
         addr_map.pop(crc_addr + i, None)
 
