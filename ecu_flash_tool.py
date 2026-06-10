@@ -103,15 +103,10 @@ def load_hex(path):
 def build_blocks(firmware, base_addr, log_fn=None):
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
-    # Pad with 0xFF if firmware starts above ECU_FLASH_BASE so data lands at
-    # the correct flash addresses (erased flash = 0xFF).
-    pad = base_addr - ECU_FLASH_BASE
-    if pad > 0:
-        firmware = bytes([0xFF] * pad) + firmware
     total     = -(-len(firmware) // MAX_BLOCK)
     raw_ids   = list(range(total + 1, 1, -1))
     block_ids = [1 if x == 2 else x for x in raw_ids]
-    blocks, offset, addr = [], 0, ECU_FLASH_BASE
+    blocks, offset, addr = [], 0, base_addr  # start from hex file's base address
     for b_id in block_ids:
         chunk = firmware[offset:offset + MAX_BLOCK]
         if log_fn:
