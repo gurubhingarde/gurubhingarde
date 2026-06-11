@@ -412,6 +412,15 @@ class FlashWorker:
                 self.send_and_wait(make_frame(0x00, eob_pl))
                 self.log(f"    Block done ✓")
 
+                # Re-arm: send heartbeats between blocks so ECU is ready for next erase
+                if blk_idx < len(blocks) - 1:
+                    for _ in range(5):
+                        self.bus.send(hb_msg)
+                        rx = self.bus.recv(timeout=0.05)
+                        if rx and rx.arbitration_id == self.ecu_id:
+                            break
+                        time.sleep(0.05)
+
             # ── Phase 3: Program ──────────────────────────────────────────────
             self.log("\n[3/5] Program command (writing CRC to NVM)...")
             prog_pl = addr_to_04_payload(crc_addr, 4)
