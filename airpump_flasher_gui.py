@@ -139,13 +139,33 @@ def load_hex(path):
 
 # ── Block builder ─────────────────────────────────────────────────────────────
 
+def split_at_boundaries(segments):
+    """
+    Split segments at 8KB (ADDR_STEP) flash-erase boundaries relative to
+    ECU_FLASH_BASE.  Segments already aligned are returned unchanged.
+    """
+    result = []
+    for seg_addr, seg_data in segments:
+        start = seg_addr
+        data  = seg_data
+        while data:
+            next_boundary = ((start - ECU_FLASH_BASE) // ADDR_STEP + 1) * ADDR_STEP + ECU_FLASH_BASE
+            if next_boundary >= start + len(data):
+                result.append((start, data))
+                break
+            cut = next_boundary - start
+            result.append((start, data[:cut]))
+            start = next_boundary
+            data  = data[cut:]
+    return result
+
+
 def build_blocks(segments, log_fn=None):
     """
-    One block per hex segment.  Block-id formula verified against OEM logs for
-    VER1 (7 blocks), VER2 (5 blocks) and VER3 (5 blocks):
-        b_id = N_SLOTS + 1 - (end_addr - ECU_FLASH_BASE) // ADDR_STEP
-    Last segment always gets id=1.
+    One block per hex segment (after 8KB-boundary splitting).
+    Block-id formula: b_id = N_SLOTS + 1 - slot_i; last block always id=1.
     """
+    segments = split_at_boundaries(segments)
     blocks = []
     total  = len(segments)
     for i, (seg_addr, seg_data) in enumerate(segments):
