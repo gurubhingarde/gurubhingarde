@@ -55,11 +55,6 @@ BLOCK_ID_BASE  = ECU_FLASH_BASE + 6 * 0x2000  # 0x003F4000
 
 
 def load_hex(path):
-    """
-    Address-aware Intel HEX reader.
-    Returns (segments, crc_bytes, crc_addr, base_addr) where segments is a list of
-    (start_addr, data_bytes) tuples for each contiguous address region in the file.
-    """
     records = []
     with open(path) as f:
         for line in f:
@@ -79,97 +74,49 @@ def load_hex(path):
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
-            full = ela | addr
             if bc == 4:
-                crc_addr = full
+                crc_addr = ela | addr
             if base_addr is None and bc > 4:
-                base_addr = full
+                base_addr = ela | addr
 
     if crc_addr is None:
         raise ValueError("No 4-byte CRC record found in hex file")
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
-    # Build address map AND sequential stream together
-    addr_map = {}
     seq = bytearray()
     ela = 0
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
-            full = ela | addr
-            for i, b in enumerate(data):
-                addr_map[full + i] = b
             seq += data
         elif rt == 1:
             break
 
-    # CRC bytes from sequential tail — robust against multiple bc==4 records in file
     crc_bytes = bytes(seq[-4:])
-    for i in range(4):
-        addr_map.pop(crc_addr + i, None)
-
-    segments = []
-    if addr_map:
-        sorted_addrs = sorted(addr_map.keys())
-        seg_start = sorted_addrs[0]
-        seg_data  = bytearray()
-        prev_addr = sorted_addrs[0] - 1
-        for a in sorted_addrs:
-            if a != prev_addr + 1:
-                if seg_data:
-                    segments.append((seg_start, bytes(seg_data)))
-                seg_start = a
-                seg_data  = bytearray()
-            seg_data.append(addr_map[a])
-            prev_addr = a
-        if seg_data:
-            segments.append((seg_start, bytes(seg_data)))
-
-    return segments, crc_bytes, crc_addr, base_addr
+    firmware  = bytes(seq[:-4])
+    return firmware, crc_bytes, crc_addr, base_addr
 
 
 # ── Block builder ─────────────────────────────────────────────────────────────
 
-def build_blocks(segments, log_fn=None):
-    """
-    Build flash blocks from (addr, data) segments, preserving non-aligned patches.
-
-    Block-id rules (reverse-engineered from OEM traces):
-      - Aligned + full (== 16 KB) : id = (BLOCK_ID_BASE - addr) // 8KB
-      - Aligned + partial         : id = formula + 1
-      - Non-aligned (patch)       : id = formula on floor(addr, 8KB)
-      - Last block overall        : id = 1
-    """
+def build_blocks(firmware, base_addr, log_fn=None):
     ADDR_STEP = 0x2000
     MAX_BLOCK = 0x4000
     blocks    = []
-    for seg_addr, seg_data in segments:
-        offset = 0
-        addr   = seg_addr
-        while offset < len(seg_data):
-            chunk   = seg_data[offset:offset + MAX_BLOCK]
-            is_full = (len(chunk) == MAX_BLOCK)
-            aligned = (addr % ADDR_STEP == 0)
-
-            if aligned and is_full:
-                b_id = (BLOCK_ID_BASE - addr) // ADDR_STEP
-            elif aligned:
-                b_id = (BLOCK_ID_BASE - addr) // ADDR_STEP + 1
-            else:
-                floor_addr = (addr // ADDR_STEP) * ADDR_STEP
-                b_id = (BLOCK_ID_BASE - floor_addr) // ADDR_STEP
-
-            if log_fn:
-                log_fn(f"    0x{addr:08X}  {len(chunk):5d} B  id=0x{b_id:02X}")
-            blocks.append({"addr": addr, "size": len(chunk),
-                            "data": chunk, "block_id": b_id})
-            offset += MAX_BLOCK
-            addr   += ADDR_STEP
-
-    if blocks:
-        blocks[-1]["block_id"] = 1
+    total     = -(-len(firmware) // MAX_BLOCK)
+    offset, addr = 0, base_addr
+    for i in range(total):
+        chunk   = firmware[offset:offset + MAX_BLOCK]
+        is_last = (i == total - 1)
+        b_id    = 1 if is_last else (BLOCK_ID_BASE - addr) // ADDR_STEP
+        if log_fn:
+            log_fn(f"    0x{addr:08X}  {len(chunk):5d} B  id=0x{b_id:02X}")
+        blocks.append({"addr": addr, "size": len(chunk),
+                        "data": chunk, "block_id": b_id})
+        offset += MAX_BLOCK
+        addr   += ADDR_STEP
     return blocks
 
 def addr_to_04_payload(full_addr, size):
@@ -235,15 +182,15 @@ class FlashWorker:
         try:
             self.log("Loading hex file...")
             self.log(f"  Tool ID  : 0x{self.tool_id:08X}  ECU ID: 0x{self.ecu_id:08X}")
-            segments, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
-            crc_int   = int.from_bytes(crc_bytes, "big")
-            total_seg = sum(len(d) for _, d in segments)
-            self.log(f"  Segments : {len(segments)} ({total_seg:,} bytes total)")
+            firmware, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
+            crc_int = int.from_bytes(crc_bytes, "big")
+            self.log(f"  Firmware : {len(firmware):,} bytes")
             self.log(f"  Base addr: 0x{base_addr:08X}")
-            self.log(f"  CRC      : 0x{crc_int:08X}  at 0x{crc_addr:08X}")
+            self.log(f"  CRC      : 0x{crc_int:08X}")
+            self.log(f"  CRC addr : 0x{crc_addr:08X}")
 
             self.log(f"  Blocks:")
-            blocks = build_blocks(segments, log_fn=self.log)
+            blocks = build_blocks(firmware, base_addr, log_fn=self.log)
 
             total_frames = sum(-(-b["size"] // PAYLOAD_BYTES) for b in blocks)
 
