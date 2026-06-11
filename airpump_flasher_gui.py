@@ -92,12 +92,8 @@ def load_hex(path):
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
-    # Second pass: build address-contiguous segments
-    # A new segment starts whenever the address jumps (gap or backward)
-    all_segs = []
-    cur_start = None
-    cur_data  = bytearray()
-    cur_next  = None
+    # Second pass: build address→byte map (overlapping records: last write wins)
+    addr_map = {}
     ela = 0
     for bc, addr, rt, data in records:
         if rt == 4:
@@ -108,20 +104,23 @@ def load_hex(path):
         if rt != 0:
             continue
         full_addr = ela | addr
-        if cur_next is None:
-            cur_start = full_addr
-            cur_data  = bytearray(data)
-            cur_next  = full_addr + bc
-        elif full_addr == cur_next:
-            cur_data += data
-            cur_next += bc
-        else:
-            all_segs.append((cur_start, bytes(cur_data)))
-            cur_start = full_addr
-            cur_data  = bytearray(data)
-            cur_next  = full_addr + bc
-    if cur_data:
-        all_segs.append((cur_start, bytes(cur_data)))
+        for i, byte in enumerate(data):
+            addr_map[full_addr + i] = byte
+
+    # Extract truly contiguous address ranges as segments
+    all_segs = []
+    if addr_map:
+        sorted_addrs = sorted(addr_map.keys())
+        seg_start = sorted_addrs[0]
+        prev_addr = sorted_addrs[0]
+        for a in sorted_addrs[1:]:
+            if a > prev_addr + 1:
+                seg_data = bytes(addr_map[x] for x in range(seg_start, prev_addr + 1))
+                all_segs.append((seg_start, seg_data))
+                seg_start = a
+            prev_addr = a
+        seg_data = bytes(addr_map[x] for x in range(seg_start, prev_addr + 1))
+        all_segs.append((seg_start, seg_data))
 
     # Separate CRC segment from firmware segments
     crc_bytes = None
