@@ -17,8 +17,8 @@ import can
 # ── Protocol constants ────────────────────────────────────────────────────────
 
 PUMP_TYPES = {
-    "Air Pump": {"tool_id": 0x180006FF, "ecu_id": 0x1800FF06},
-    "Oil Pump": {"tool_id": 0x180005FF, "ecu_id": 0x1800FF05},
+    "Air Pump": {"tool_id": 0x180006FF, "ecu_id": 0x1800FF06, "ecu_addr": 0x06},
+    "Oil Pump": {"tool_id": 0x180005FF, "ecu_id": 0x1800FF05, "ecu_addr": 0x05},
 }
 BCAST_ID = 0x1800FFFF
 
@@ -132,7 +132,7 @@ def addr_to_04_payload(full_addr, size):
 
 class FlashWorker:
     def __init__(self, interface, channel, bitrate, hex_path, log_q, progress_q,
-                 tool_id, ecu_id):
+                 tool_id, ecu_id, ecu_addr):
         self.interface  = interface
         self.channel    = channel
         self.bitrate    = bitrate
@@ -140,6 +140,7 @@ class FlashWorker:
         self.log_q      = log_q      # queue for log messages (str)
         self.tool_id    = tool_id
         self.ecu_id     = ecu_id
+        self.ecu_addr   = ecu_addr   # low byte of ecu_id, used in broadcast frame
         self.progress_q = progress_q # queue for progress (0.0–1.0)
         self.bus        = None
         self.abort      = False
@@ -218,6 +219,43 @@ class FlashWorker:
             self.log("  CAN bus open ✓")
 
             # ── Phase 1: Keepalive ────────────────────────────────────────────
+            # Step 1a: Send "enter bootloader" broadcast so a live (running) ECU
+            # reboots into its bootloader without needing a power cycle.
+            # Broadcast frame: FF 02 <ecu_addr> 00 00 00 00 <XOR>
+            # ECU ACKs with:   FF 82 <ecu_addr> 00 00 00 00 <XOR>  (bit7 of byte1 set)
+            bcast_pl  = bytes([0x02, self.ecu_addr, 0x00, 0x00, 0x00, 0x00])
+            bcast_raw = bytes([0xFF]) + bcast_pl
+            bcast_xor = 0
+            for b in bcast_raw:
+                bcast_xor ^= b
+            bcast_frame = bcast_raw + bytes([bcast_xor])
+            bcast_msg   = can.Message(arbitration_id=BCAST_ID, data=bcast_frame,
+                                      is_extended_id=True)
+
+            self.log("\n[1/5] Keepalive — waking ECU...")
+            self.log(f"  Sending 'enter bootloader' broadcast on 0x{BCAST_ID:08X}:")
+            self.log(f"    {bcast_frame.hex().upper()}")
+            self.bus.send(bcast_msg)
+
+            # Wait up to 500 ms for ECU broadcast ACK
+            bcast_acked = False
+            deadline = time.monotonic() + 0.5
+            while time.monotonic() < deadline:
+                rx = self.bus.recv(timeout=0.05)
+                if rx and rx.arbitration_id == self.ecu_id:
+                    rx_data = bytes(rx.data)
+                    if rx_data[0] == 0xFF and rx_data[1] == 0x82:
+                        self.log(f"  Broadcast ACK ✓  ({rx_data.hex().upper()})")
+                        bcast_acked = True
+                        break
+
+            if bcast_acked:
+                self.log("  ECU is rebooting to bootloader — waiting ~300 ms...")
+                time.sleep(0.3)
+            else:
+                self.log("  No broadcast ACK (ECU may already be in bootloader)")
+
+            # Step 1b: Heartbeat loop
             # Heartbeat byte[2] encodes the expected base address so the ECU
             # unlocks the correct flash region.
             # Formula: byte = (BLOCK_ID_BASE - base_addr) / 8KB + 1
@@ -227,7 +265,6 @@ class FlashWorker:
             hb_data = make_frame(0x00, bytes([0x00, hb_byte, 0x00, 0x00, 0x00, 0x00]))
             hb_msg  = can.Message(arbitration_id=self.tool_id, data=hb_data, is_extended_id=True)
 
-            self.log("\n[1/5] Keepalive — waking ECU...")
             self.log(f"  Heartbeat: 0x{hb_byte:02X}  (base 0x{base_addr:08X})")
             self.log(f"  Waiting up to {HEARTBEAT_COUNT * HEARTBEAT_INTERVAL:.0f} s ...")
 
@@ -242,7 +279,7 @@ class FlashWorker:
                 rx = self.bus.recv(timeout=0.08)
                 if rx and rx.arbitration_id == self.ecu_id:
                     elapsed = hb_sent * HEARTBEAT_INTERVAL
-                    mode = "live ECU → rebooted to bootloader" if hb_sent > 15 else "bootloader / cold-start"
+                    mode = "live ECU → rebooted to bootloader" if bcast_acked else "bootloader / cold-start"
                     self.log(f"  ECU responded ✓  ({bytes(rx.data).hex().upper()})")
                     self.log(f"  Mode: {mode}  (after {hb_sent} heartbeats, ~{elapsed:.1f} s)")
                     ecu_woke = True
@@ -639,6 +676,7 @@ class App(tk.Tk):
             progress_q=self.prog_q,
             tool_id=pump["tool_id"],
             ecu_id=pump["ecu_id"],
+            ecu_addr=pump["ecu_addr"],
         )
         threading.Thread(target=self.worker.run, daemon=True).start()
 
