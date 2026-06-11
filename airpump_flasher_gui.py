@@ -52,6 +52,7 @@ def verify_frame(data):
 
 ECU_FLASH_BASE = 0x003E8000
 BLOCK_ID_BASE  = ECU_FLASH_BASE + 6 * 0x2000  # 0x003F4000
+ADDR_STEP      = 0x2000
 
 def load_hex(path):
     records = []
@@ -83,38 +84,83 @@ def load_hex(path):
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
-    seq = bytearray()
+    # Build address→byte map: overlapping records deduplicated (last write wins)
+    addr_map = {}
     ela = 0
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
-        elif rt == 0:
-            seq += data
-        elif rt == 1:
+            continue
+        if rt == 1:
             break
+        if rt != 0:
+            continue
+        full_addr = ela | addr
+        for i, byte in enumerate(data):
+            addr_map[full_addr + i] = byte
 
-    crc_bytes = bytes(seq[-4:])
-    firmware  = bytes(seq[:-4])
-    return firmware, crc_bytes, crc_addr, base_addr
+    # Extract truly contiguous address ranges
+    segments = []
+    if addr_map:
+        sorted_addrs = sorted(addr_map.keys())
+        seg_start = sorted_addrs[0]
+        prev_addr = sorted_addrs[0]
+        for a in sorted_addrs[1:]:
+            if a > prev_addr + 1:
+                seg_data = bytes(addr_map[x] for x in range(seg_start, prev_addr + 1))
+                segments.append((seg_start, seg_data))
+                seg_start = a
+            prev_addr = a
+        seg_data = bytes(addr_map[x] for x in range(seg_start, prev_addr + 1))
+        segments.append((seg_start, seg_data))
+
+    # Separate CRC segment
+    crc_bytes = None
+    fw_segs   = []
+    for seg_addr, seg_data in segments:
+        if seg_addr == crc_addr and len(seg_data) == 4:
+            crc_bytes = seg_data
+        else:
+            fw_segs.append((seg_addr, seg_data))
+
+    if crc_bytes is None:
+        raise ValueError(f"CRC segment not found at 0x{crc_addr:08X}")
+
+    return fw_segs, crc_bytes, crc_addr, base_addr
 
 
 # ── Block builder ─────────────────────────────────────────────────────────────
 
-def build_blocks(firmware, base_addr, log_fn=None):
-    ADDR_STEP = 0x2000
-    MAX_BLOCK = 0x4000
-    total     = -(-len(firmware) // MAX_BLOCK)
-    blocks, offset, addr = [], 0, base_addr
-    for i in range(total):
-        chunk   = firmware[offset:offset + MAX_BLOCK]
+def build_blocks(fw_segs, log_fn=None):
+    """
+    Split each firmware segment at 8KB (ADDR_STEP) boundaries, then assign
+    block IDs using the original formula: (BLOCK_ID_BASE - addr) // ADDR_STEP.
+    Last block always gets id=1.
+    """
+    # Split at 8KB boundaries
+    split = []
+    for seg_addr, seg_data in fw_segs:
+        start = seg_addr
+        data  = seg_data
+        while data:
+            next_b = ((start - ECU_FLASH_BASE) // ADDR_STEP + 1) * ADDR_STEP + ECU_FLASH_BASE
+            if next_b >= start + len(data):
+                split.append((start, data))
+                break
+            cut = next_b - start
+            split.append((start, data[:cut]))
+            start = next_b
+            data  = data[cut:]
+
+    blocks = []
+    total  = len(split)
+    for i, (addr, data) in enumerate(split):
         is_last = (i == total - 1)
         b_id    = 1 if is_last else (BLOCK_ID_BASE - addr) // ADDR_STEP
         if log_fn:
-            log_fn(f"    0x{addr:08X}  {len(chunk):5d} B  id=0x{b_id:02X}")
-        blocks.append({"addr": addr, "size": len(chunk),
-                        "data": chunk, "block_id": b_id})
-        offset += MAX_BLOCK
-        addr   += ADDR_STEP
+            log_fn(f"    0x{addr:08X}  {len(data):5d} B  id=0x{b_id:02X}")
+        blocks.append({"addr": addr, "size": len(data),
+                       "data": bytes(data), "block_id": b_id})
     return blocks
 
 def addr_to_04_payload(full_addr, size):
@@ -180,15 +226,16 @@ class FlashWorker:
             # ── Parse hex ────────────────────────────────────────────────────
             self.log("Loading hex file...")
             self.log(f"  Tool ID  : 0x{self.tool_id:08X}  ECU ID: 0x{self.ecu_id:08X}")
-            firmware, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
+            fw_segs, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
             crc_int = int.from_bytes(crc_bytes, "big")
-            self.log(f"  Firmware : {len(firmware):,} bytes")
+            fw_size = sum(len(d) for _, d in fw_segs)
+            self.log(f"  Firmware : {fw_size:,} bytes  ({len(fw_segs)} segment(s))")
             self.log(f"  Base addr: 0x{base_addr:08X}")
             self.log(f"  CRC      : 0x{crc_int:08X}")
             self.log(f"  CRC addr : 0x{crc_addr:08X}")
 
             self.log(f"  Blocks:")
-            blocks = build_blocks(firmware, base_addr, log_fn=self.log)
+            blocks = build_blocks(fw_segs, log_fn=self.log)
 
             total_frames = sum(
                 -(-b["size"] // PAYLOAD_BYTES) for b in blocks
