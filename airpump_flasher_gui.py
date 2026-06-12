@@ -74,7 +74,7 @@ def load_hex(path):
             ela = int.from_bytes(data, "big") << 16
         elif rt == 0:
             if bc == 4:
-                crc_addr = ela | addr
+                crc_addr = ela | addr   # last 4-byte record wins
             if base_addr is None and bc > 4:
                 base_addr = ela | addr
 
@@ -83,22 +83,125 @@ def load_hex(path):
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
-    seq = bytearray()
+    # Detect stride anomalies: OEM hex sometimes uses larger-than-normal stride
+    # (current_addr - prev_addr) > prev_bc // 2 signals a non-standard gap
+    has_anomaly = False
     ela = 0
+    prev_bc2 = None
+    prev_full2 = None
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
+            prev_bc2 = None; prev_full2 = None
         elif rt == 0:
-            seq += data
+            full_addr = ela | addr
+            if (prev_bc2 is not None and prev_full2 is not None and
+                    full_addr != crc_addr and
+                    (full_addr - prev_full2) > prev_bc2 // 2):
+                has_anomaly = True
+                break
+            prev_bc2 = bc; prev_full2 = full_addr
         elif rt == 1:
             break
 
-    crc_bytes = bytes(seq[-4:])
-    firmware  = bytes(seq[:-4])
-    return firmware, crc_bytes, crc_addr, base_addr
+    if has_anomaly:
+        # OEM-compatible block builder: split on sector boundary, stride anomaly, ELA change
+        oem_blocks, crc_bytes = _build_oem_blocks(records, crc_addr)
+        firmware_size = sum(b["size"] for b in oem_blocks)
+        return None, crc_bytes, crc_addr, base_addr, oem_blocks, firmware_size
+    else:
+        seq = bytearray()
+        ela = 0
+        for bc, addr, rt, data in records:
+            if rt == 4:
+                ela = int.from_bytes(data, "big") << 16
+            elif rt == 0:
+                seq += data
+            elif rt == 1:
+                break
+        crc_bytes = bytes(seq[-4:])
+        firmware  = bytes(seq[:-4])
+        return firmware, crc_bytes, crc_addr, base_addr, None, len(firmware)
 
 
-# ── Block builder ─────────────────────────────────────────────────────────────
+def _build_oem_blocks(records, crc_addr):
+    """Build blocks matching OEM tool: split on sector boundary, stride anomaly, ELA change.
+    Block IDs: full-sector (16384 B) → formula; partial new sector → inherit prev id;
+    same sector (stride split) → prev id − 1; last firmware block → 1."""
+    ADDR_STEP = 0x2000
+
+    blocks    = []
+    cur_addr  = None
+    cur_data  = bytearray()
+    cur_sector = -1
+    prev_bc   = None
+    prev_full = None
+    prev_ela  = None
+    ela       = 0
+    crc_bytes = None
+
+    for bc, addr, rt, data in records:
+        if rt == 4:
+            new_ela = int.from_bytes(data, "big") << 16
+            if prev_ela is not None and new_ela != prev_ela and cur_addr is not None:
+                blocks.append({"addr": cur_addr, "data": bytes(cur_data),
+                                "size": len(cur_data)})
+                cur_addr = None; cur_data = bytearray(); cur_sector = -1
+                prev_bc = None; prev_full = None
+            ela = new_ela; prev_ela = new_ela
+            continue
+        if rt == 1:
+            break
+        if rt != 0:
+            continue
+
+        full_addr = ela | addr
+
+        if full_addr == crc_addr and bc == 4:
+            if cur_addr is not None:
+                blocks.append({"addr": cur_addr, "data": bytes(cur_data),
+                                "size": len(cur_data)})
+            crc_bytes = bytes(data)
+            break
+
+        sector = (full_addr // ADDR_STEP) * ADDR_STEP
+
+        stride_anomaly = (prev_bc is not None and prev_full is not None and
+                          (full_addr - prev_full) > prev_bc // 2)
+
+        if cur_addr is None or sector != cur_sector or stride_anomaly:
+            if cur_addr is not None:
+                blocks.append({"addr": cur_addr, "data": bytes(cur_data),
+                                "size": len(cur_data)})
+            cur_addr = full_addr; cur_data = bytearray(data); cur_sector = sector
+        else:
+            cur_data += data
+
+        prev_bc = bc; prev_full = full_addr
+
+    # Assign block IDs
+    prev_id     = None
+    prev_sector = None
+    for i, blk in enumerate(blocks):
+        is_last = (i == len(blocks) - 1)
+        sector  = (blk["addr"] // ADDR_STEP) * ADDR_STEP
+        if is_last:
+            blk["block_id"] = 1
+        elif prev_id is None:
+            blk["block_id"] = (BLOCK_ID_BASE - blk["addr"]) // ADDR_STEP
+        elif sector == prev_sector:
+            blk["block_id"] = prev_id - 1          # stride-anomaly sub-block
+        elif blk["size"] == 16384:
+            blk["block_id"] = (BLOCK_ID_BASE - blk["addr"]) // ADDR_STEP
+        else:
+            blk["block_id"] = prev_id              # partial block in new sector
+        prev_id     = blk["block_id"]
+        prev_sector = sector
+
+    return blocks, crc_bytes
+
+
+# ── Block builder (simple sequential, no stride anomalies) ────────────────────
 
 def build_blocks(firmware, base_addr, log_fn=None):
     ADDR_STEP = 0x2000
@@ -180,14 +283,21 @@ class FlashWorker:
             # ── Parse hex ────────────────────────────────────────────────────
             self.log("Loading hex file...")
             self.log(f"  Tool ID  : 0x{self.tool_id:08X}  ECU ID: 0x{self.ecu_id:08X}")
-            firmware, crc_bytes, crc_addr, base_addr = load_hex(self.hex_path)
+            firmware, crc_bytes, crc_addr, base_addr, oem_blocks, fw_size = \
+                load_hex(self.hex_path)
             crc_int = int.from_bytes(crc_bytes, "big")
-            self.log(f"  Firmware : {len(firmware):,} bytes")
+            self.log(f"  Firmware : {fw_size:,} bytes")
             self.log(f"  Base addr: 0x{base_addr:08X}")
             self.log(f"  CRC      : 0x{crc_int:08X}")
             self.log(f"  CRC addr : 0x{crc_addr:08X}")
             self.log(f"  Blocks:")
-            blocks = build_blocks(firmware, base_addr, log_fn=self.log)
+            if oem_blocks is not None:
+                for blk in oem_blocks:
+                    self.log(f"    0x{blk['addr']:08X}  {blk['size']:5d} B"
+                             f"  id=0x{blk['block_id']:02X}")
+                blocks = oem_blocks
+            else:
+                blocks = build_blocks(firmware, base_addr, log_fn=self.log)
 
             total_frames = sum(
                 -(-b["size"] // PAYLOAD_BYTES) for b in blocks
