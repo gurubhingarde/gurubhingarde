@@ -236,6 +236,11 @@ class FlashWorker:
 
             self.log(f"  Blocks:")
             blocks = build_blocks(fw_segs, log_fn=self.log)
+            # Debug: show first/last 4 bytes of first block to verify firmware content
+            if blocks:
+                d0 = blocks[0]["data"]
+                self.log(f"  First block first 4B: {d0[:4].hex().upper()}")
+                self.log(f"  First block last  4B: {d0[-4:].hex().upper()}")
 
             total_frames = sum(
                 -(-b["size"] // PAYLOAD_BYTES) for b in blocks
