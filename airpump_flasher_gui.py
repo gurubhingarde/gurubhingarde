@@ -131,13 +131,15 @@ def load_hex(path):
 
 # ── Block builder ─────────────────────────────────────────────────────────────
 
-def build_blocks(fw_segs, log_fn=None):
+def build_blocks(fw_segs, crc_addr, log_fn=None):
     """
-    Split each firmware segment at 8KB (ADDR_STEP) boundaries, then assign
-    block IDs using the original formula: (BLOCK_ID_BASE - addr) // ADDR_STEP.
-    Last block always gets id=1.
+    Split firmware segments at 8KB boundaries, pad the last sub-block to the
+    8KB boundary with 0xFF, then fill any unused 8KB sectors between the end
+    of firmware and the CRC sector with 0xFF blocks.  This ensures the ECU's
+    CRC check (which covers the full range base_addr..crc_addr-1) passes even
+    after flashing a smaller firmware over a larger one.
     """
-    # Split at 8KB boundaries
+    # ── Step 1: split at 8KB boundaries ──────────────────────────────────────
     split = []
     for seg_addr, seg_data in fw_segs:
         start = seg_addr
@@ -152,6 +154,24 @@ def build_blocks(fw_segs, log_fn=None):
             start = next_b
             data  = data[cut:]
 
+    # ── Step 2: pad last sub-block to 8KB boundary with 0xFF ─────────────────
+    if split:
+        last_addr, last_data = split[-1]
+        end_of_last = last_addr + len(last_data)
+        next_b = ((last_addr - ECU_FLASH_BASE) // ADDR_STEP + 1) * ADDR_STEP + ECU_FLASH_BASE
+        if end_of_last < next_b:
+            last_data = bytes(last_data) + b'\xFF' * (next_b - end_of_last)
+            split[-1] = (last_addr, last_data)
+
+    # ── Step 3: fill 0xFF blocks for gap between firmware end and CRC sector ─
+    crc_sector_start = ((crc_addr - ECU_FLASH_BASE) // ADDR_STEP) * ADDR_STEP + ECU_FLASH_BASE
+    if split:
+        fill_start = split[-1][0] + len(split[-1][1])
+        while fill_start < crc_sector_start:
+            split.append((fill_start, b'\xFF' * ADDR_STEP))
+            fill_start += ADDR_STEP
+
+    # ── Step 4: assign block IDs ──────────────────────────────────────────────
     blocks = []
     total  = len(split)
     for i, (addr, data) in enumerate(split):
@@ -235,7 +255,7 @@ class FlashWorker:
             self.log(f"  CRC addr : 0x{crc_addr:08X}")
 
             self.log(f"  Blocks:")
-            blocks = build_blocks(fw_segs, log_fn=self.log)
+            blocks = build_blocks(fw_segs, crc_addr, log_fn=self.log)
             # Debug: show first/last 4 bytes of first block to verify firmware content
             if blocks:
                 d0 = blocks[0]["data"]
