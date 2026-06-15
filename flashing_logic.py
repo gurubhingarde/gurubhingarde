@@ -680,6 +680,9 @@ class PumpFlashingLogic:
 
         total_frames = sum(-(-b["size"] // _PUMP_PAYLOAD_BYTES) for b in blocks)
 
+        # Derive ECU address byte from ecu_id (low byte of the 3rd octet)
+        ecu_addr = self.ecu_id & 0xFF
+
         bus = CANBusWrapper(self.interface, self.channel, self.bitrate)
         try:
             # ── Step 0: Keepalive ────────────────────────────────────────────
@@ -688,6 +691,34 @@ class PumpFlashingLogic:
             hb_data = _pump_make_frame(0x00, bytes([0x00, hb_byte, 0x00, 0x00, 0x00, 0x00]))
             self.log_write(f"\n[1/5] Keepalive — waking ECU (up to {_PUMP_HEARTBEAT_COUNT * _PUMP_HEARTBEAT_INTERVAL:.0f} s)...")
             self.log_write(f"  Heartbeat byte: 0x{hb_byte:02X}  (supports live ECU and cold-start)")
+
+            # Send "enter bootloader" broadcast so a live (running) ECU reboots
+            # into bootloader without needing a power cycle.
+            # Frame: FF 02 <ecu_addr> 00 00 00 00 <XOR>  on 0x1800FFFF
+            bcast_raw   = bytes([0xFF, 0x02, ecu_addr, 0x00, 0x00, 0x00, 0x00])
+            bcast_xor   = 0
+            for b in bcast_raw:
+                bcast_xor ^= b
+            bcast_frame = bcast_raw + bytes([bcast_xor])
+            bus.send(_PUMP_BCAST_ID, list(bcast_frame), is_extended_id=True)
+            self.log_write(f"  Broadcast 'enter bootloader': {bcast_frame.hex().upper()}")
+
+            # Wait up to 500 ms for broadcast ACK (FF 82 <ecu_addr> ...)
+            bcast_acked = False
+            deadline = time.time() + 0.5
+            while time.time() < deadline:
+                rx = bus.recv(timeout=0.05)
+                if rx and rx['arbitration_id'] == self.ecu_id:
+                    d = bytes(rx['data'])
+                    if d[0] == 0xFF and d[1] == 0x82:
+                        self.log_write(f"  Broadcast ACK ✓  ({d.hex().upper()})")
+                        bcast_acked = True
+                        break
+            if bcast_acked:
+                self.log_write("  ECU rebooting to bootloader — waiting 300 ms...")
+                time.sleep(0.3)
+            else:
+                self.log_write("  No broadcast ACK (ECU may already be in bootloader)")
 
             ecu_woke = False
             for i in range(_PUMP_HEARTBEAT_COUNT):
