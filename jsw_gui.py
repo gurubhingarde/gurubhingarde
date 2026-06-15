@@ -546,7 +546,7 @@ class FlashingApp(tk.Tk):
             self._start_uds_flash(can_params)
 
     def _start_pump_flash(self, pump_type, can_params):
-        """Direct start for Air Pump / Oil Pump (heartbeat-based wakeup)."""
+        """Ignition OFF→ON dialog for Air Pump / Oil Pump (same as UDS controllers)."""
         self.flashing_logic = PumpFlashingLogic(
             pump_type=pump_type,
             interface=can_params["interface"],
@@ -554,12 +554,31 @@ class FlashingApp(tk.Tk):
             bitrate=can_params["bitrate"],
             log_callback=self.log_write,
         )
-        self.log_write(f"▶ Starting {pump_type} flash (ECU can be live or powered on now)...")
-        self.flashing_start_time = time.time()
-        self._elapsed_timer_running = True
-        self.update_elapsed_time()
-        self.flashing_thread = threading.Thread(target=self.flash_process, daemon=True)
-        self.flashing_thread.start()
+        self._ign_dlg = IgnitionDialog(self)
+
+        def _on_stop():
+            try: self.cancel_event.set()
+            except Exception: pass
+            try: self._ign_dlg.auto_close()
+            except Exception: pass
+            self._elapsed_timer_running = False
+            self.status_var.set("Status: Cancelled by user")
+
+        def _on_ok_clicked():
+            self._ign_dlg.transition_to_on(_on_stop)
+            self.log_write(f"Waiting for {pump_type} ignition ON... (up to 100 s)")
+            self._ign_dlg.start_countdown(
+                total_seconds=100,
+                stop_flag_getter=lambda: self.cancel_event.is_set(),
+                on_timeout=_on_stop
+            )
+            self.flashing_start_time = time.time()
+            self._elapsed_timer_running = True
+            self.update_elapsed_time()
+            self.flashing_thread = threading.Thread(target=self.flash_process, daemon=True)
+            self.flashing_thread.start()
+
+        self._ign_dlg.ok_btn.config(command=_on_ok_clicked)
 
     def _start_uds_flash(self, can_params):
         """UDS flash with ignition OFF→ON dialog."""
