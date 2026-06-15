@@ -554,9 +554,10 @@ class FlashingApp(tk.Tk):
             font=("Segoe UI", 11, "bold"),
             bg="#6B7280", fg="white",
             relief="flat", cursor="hand2", pady=10,
+            width=12,
             state="disabled",
             command=self._stop_fota_flash)
-        self.fota_stop_btn.pack(side="left", width=120)
+        self.fota_stop_btn.pack(side="left")
 
         # Log card
         _p2_sec("Log")
