@@ -601,7 +601,7 @@ class FlashingApp(tk.Tk):
                 color = self.color_incomplete
                 icon = self.steps[i]["icon"]
             self.step_icon_labels[i].config(fg=color, text=icon)
-            self.step_labels[i].config(fg=color)
+            self.step_labels[i].config(fg=color, text=self.steps[i]["label"])
 
     # ── Phase switching ───────────────────────────────────────────────────────
 
@@ -695,8 +695,10 @@ class FlashingApp(tk.Tk):
         try:
             def step_cb(event, current, total):
                 if event == "step":
+                    # Mark all steps before this one as done; leave current as active (blue)
+                    for i in range(current):
+                        self.completed_steps.add(i)
                     self.current_step = min(current, len(self.steps) - 1)
-                    self.completed_steps.add(self.current_step)
                     self.update_progress_tracker()
                     step_name = self.steps[self.current_step]["label"]
                     self.fota_step_var.set(f"Step {current + 1} — {step_name}")
@@ -946,8 +948,10 @@ class FlashingApp(tk.Tk):
         try:
             def step_callback(event, current, total):
                 if event == "step":
+                    # Mark all steps before this one as done; leave current as active (blue)
+                    for i in range(current):
+                        self.completed_steps.add(i)
                     self.current_step = min(current, len(self.steps) - 1)
-                    self.completed_steps.add(self.current_step)
                     self.update_progress_tracker()
                     if self.current_step < 3:
                         self.progress["value"] = 0
