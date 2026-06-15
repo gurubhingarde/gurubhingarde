@@ -889,8 +889,7 @@ class FOTAFlashingLogic:
                 "   Install with:  pip install python-can can-isotp", 'err')
             return False
 
-        # ── Step 0: Load DLL + parse OTA header ──────────────────────────────
-        if progress_callback: progress_callback("step", 0, 6)
+        # ── Pre-flight: Load DLL + parse OTA header (before sidebar step 0) ────
         if not dll_path or not os.path.exists(dll_path):
             self.log_write("❌ SecurityAccess.dll not found.", 'err')
             return False
@@ -948,8 +947,7 @@ class FOTAFlashingLogic:
             self.log_write(f"❌ OTA parse failed: {e}", 'err')
             return False
 
-        # ── Step 1: Connect CAN ───────────────────────────────────────────────
-        if progress_callback: progress_callback("step", 1, 6)
+        # ── Connect CAN (still pre-flight, sidebar step 0 = DiagSession) ────────
         self.log_write(f"Connecting {self.interface} / channel {self.channel}...", 'info')
         try:
             if self.interface == "pcan":
@@ -1007,9 +1005,9 @@ class FOTAFlashingLogic:
             raise TimeoutError("No response from ECU")
 
         try:
-            # ── Step 2: Programming session ───────────────────────────────────
-            if progress_callback: progress_callback("step", 2, 6)
-            self.log_write("Step 1 — Programming Session (app reset)...", 'info')
+            # ── Step 0: Diag Session ──────────────────────────────────────────
+            if progress_callback: progress_callback("step", 0, 6)
+            self.log_write("Step 1 — Diagnostic Session (0x10 0x02)...", 'info')
             try:
                 stack.send(bytes([0x10, 0x02]))
                 t = time.time() + 0.08
@@ -1050,14 +1048,14 @@ class FOTAFlashingLogic:
             self.log_write("Session OK ✓", 'ok')
             time.sleep(0.1)
 
-            # ── Step 3: Security access ───────────────────────────────────────
-            if progress_callback: progress_callback("step", 3, 6)
-            self.log_write("Step 2 — Security Seed...", 'info')
+            # ── Step 1: Security Access ───────────────────────────────────────
+            if progress_callback: progress_callback("step", 1, 6)
+            self.log_write("Step 2 — Security Access: requesting seed (0x27 0x01)...", 'info')
             resp = _uds(bytes([0x27, 0x01]))
             seed = resp[2:6]
             self.log_write(f"Seed: {seed.hex().upper()}", 'ok')
 
-            self.log_write("Step 3 — Computing Key...", 'info')
+            self.log_write("Step 2 — Security Access: computing key (0x27 0x02)...", 'info')
             key_out = ctypes.create_string_buffer(4)
             ret = sa.ComputeKey(seed, key_out)
             if ret != 0:
@@ -1067,9 +1065,9 @@ class FOTAFlashingLogic:
             _uds(bytes([0x27, 0x02]) + derived_key)
             self.log_write("Security unlocked ✓", 'ok')
 
-            # ── Step 4: Erase + request download ─────────────────────────────
-            if progress_callback: progress_callback("step", 4, 6)
-            self.log_write("Step 4 — Erasing app slot...", 'warn')
+            # ── Step 2: Erase ────────────────────────────────────────────────
+            if progress_callback: progress_callback("step", 2, 6)
+            self.log_write("Step 3 — Erase (0x31 0x01 0xFF 0x00)...", 'warn')
             erase_cmd = bytes([0x31, 0x01, 0xFF, 0x00,
                                (fw_model_id >> 8) & 0xFF,
                                 fw_model_id       & 0xFF,
@@ -1077,16 +1075,16 @@ class FOTAFlashingLogic:
             _uds(erase_cmd, timeout=60.0)
             self.log_write("Erase complete ✓", 'ok')
 
-            self.log_write("Step 5 — Request Download...", 'info')
+            self.log_write("Step 4 — Request Download (0x34)...", 'info')
             addr_b = struct.pack('>I', FOTA_APP_START_ADDR)
             size_b = struct.pack('>I', comp_sz)
             resp   = _uds(bytes([0x34, 0x11, 0x44]) + addr_b + size_b + nonce)
             max_blk = resp[2] if len(resp) >= 3 else 128
             self.log_write(f"Download accepted ✓  maxBlock={max_blk}", 'ok')
 
-            # ── Step 5: Transfer data ─────────────────────────────────────────
-            if progress_callback: progress_callback("step", 5, 6)
-            self.log_write("Step 6 — Transferring data...", 'info')
+            # ── Step 3: Download (TransferData) ──────────────────────────────
+            if progress_callback: progress_callback("step", 3, 6)
+            self.log_write("Step 4 — Transfer Data (0x36)...", 'info')
             with open(ota_path, 'rb') as _f:
                 _all = _f.read()
             data  = _all[payload_offset:]
@@ -1109,17 +1107,21 @@ class FOTAFlashingLogic:
                     self.log_write(f"  {pct}% transferred", 'dim')
             self.log_write("Transfer complete ✓", 'ok')
 
-            self.log_write("Step 7 — Transfer Exit (ECU verify, up to 5 min)...", 'warn')
+            # ── Step 4: Verify (TransferExit + CRC check) ────────────────────
+            if progress_callback: progress_callback("step", 4, 6)
+            self.log_write("Step 5 — Transfer Exit / ECU verify (0x37, up to 5 min)...", 'warn')
             _uds(bytes([0x37]), timeout=FOTA_TIMEOUT_TEXIT)
-            self.log_write("TransferExit OK ✓", 'ok')
+            self.log_write("Transfer Exit OK ✓", 'ok')
 
-            self.log_write("Step 8 — Verify CRC...", 'info')
+            self.log_write("Step 5 — Verify CRC (0x31 0x01 0xFF 0x01)...", 'info')
             resp = _uds(bytes([0x31, 0x01, 0xFF, 0x01]))
             if len(resp) < 5 or resp[4] != 0x01:
                 raise RuntimeError("CRC verification failed — ECU rejected firmware")
             self.log_write("CRC PASS ✓", 'ok')
 
-            self.log_write("Step 9 — Writing Fingerprint...", 'info')
+            # ── Step 5: ECU Reset (Fingerprint + Reset) ───────────────────────
+            if progress_callback: progress_callback("step", 5, 6)
+            self.log_write("Step 6 — Write Fingerprint (0x2E 0xF1 0x5B)...", 'info')
             try:
                 _uds(bytes([0x3E, 0x00]))
             except Exception:
@@ -1130,7 +1132,7 @@ class FOTAFlashingLogic:
             _uds(bytes([0x2E, 0xF1, 0x5B]) + ts + sn + ver_bytes)
             self.log_write("Fingerprint written ✓", 'ok')
 
-            self.log_write("Step 10 — ECU Reset...", 'info')
+            self.log_write("Step 6 — ECU Reset (0x11 0x01)...", 'info')
             try:
                 _uds(bytes([0x11, 0x01]))
             except Exception:

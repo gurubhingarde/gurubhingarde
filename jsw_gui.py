@@ -40,12 +40,12 @@ PHASE1_STEPS = [
 ]
 
 PHASE2_STEPS = [
-    {"label": "Init",              "icon": "⚡"},
-    {"label": "Connect CAN",       "icon": "⚡"},
-    {"label": "Session",           "icon": "⚙"},
-    {"label": "Security",          "icon": "✔"},
-    {"label": "Transfer",          "icon": "⬇"},
-    {"label": "Complete",          "icon": "↻"},
+    {"label": "Diag Session",      "icon": "⚡"},
+    {"label": "Security Access",   "icon": "⚙"},
+    {"label": "Erase",             "icon": "♻"},
+    {"label": "Download",          "icon": "⬇"},
+    {"label": "Verify",            "icon": "✔"},
+    {"label": "ECU Reset",         "icon": "↻"},
 ]
 
 # Tag → foreground colour for Phase 2 coloured log
