@@ -834,3 +834,326 @@ class PumpFlashingLogic:
         finally:
             bus.shutdown()
             self.log_write("🔌 CAN Bus shutdown.")
+
+
+# ============================================================
+# VCU FOTA flashing logic (UDS over ISO-TP, can-isotp)
+# ============================================================
+
+FOTA_UDS_TX_ID      = 0x7E0
+FOTA_UDS_RX_ID      = 0x7E8
+FOTA_APP_START_ADDR = 0x00014000
+FOTA_TIMEOUT_NORMAL = 10.0
+FOTA_TIMEOUT_TEXIT  = 300.0
+FOTA_OTA_PLAIN_MAGIC = 0xB00710AD
+
+FOTA_MODEL_NAMES = {
+    0x0001: "9M Bus",      0x0002: "12M City Bus",
+    0x0003: "12M Staff Bus", 0x0004: "4x2 TT",   0x0005: "6x4 TT",
+}
+
+
+class FOTAFlashingLogic:
+    """
+    VCU FOTA flash via ISO-TP / UDS (requires pip install can-isotp).
+    flash_firmware(ota_path, dll_path, ...) runs the 10-step UDS sequence.
+    progress_callback(event, current, total):
+        "step"     current 0-5   (6 sidebar phases)
+        "block"    current=bytes_done  total=total_bytes
+        "complete" current=1 total=1
+    """
+
+    def __init__(self, interface, channel, bitrate=250000, log_callback=None):
+        self.interface    = interface if interface != "peak" else "pcan"
+        self.channel      = channel
+        self.bitrate      = bitrate
+        self.log_callback = log_callback
+
+    def log_write(self, msg, tag=''):
+        print(msg)
+        if self.log_callback:
+            self.log_callback(msg, tag)
+
+    def flash_firmware(self, ota_path, dll_path=None,
+                       progress_callback=None, stop_event=None,
+                       # unused kwargs kept for compatibility
+                       app_start=None, app_end=None, log_path=None):
+        import struct, ctypes
+
+        try:
+            import can
+            import isotp
+        except ImportError as e:
+            self.log_write(
+                f"❌ Missing library: {e}\n"
+                "   Install with:  pip install python-can can-isotp", 'err')
+            return False
+
+        # ── Step 0: Load DLL + parse OTA header ──────────────────────────────
+        if progress_callback: progress_callback("step", 0, 6)
+        if not dll_path or not os.path.exists(dll_path):
+            self.log_write("❌ SecurityAccess.dll not found.", 'err')
+            return False
+        if not ota_path or not os.path.exists(ota_path):
+            self.log_write("❌ OTA binary not found.", 'err')
+            return False
+
+        self.log_write("Loading SecurityAccess.dll...", 'info')
+        try:
+            sa = ctypes.CDLL(dll_path)
+            sa.ComputeKey.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+            sa.ComputeKey.restype  = ctypes.c_int
+            sa.GetOTAInfo.argtypes = [ctypes.c_char_p,
+                                       ctypes.POINTER(ctypes.c_uint32),
+                                       ctypes.c_char_p]
+            sa.GetOTAInfo.restype  = ctypes.c_int
+            sa.GetVersion.restype  = ctypes.c_char_p
+            ver = sa.GetVersion()
+            self.log_write(f"DLL version: {ver.decode()}", 'ok')
+        except Exception as e:
+            self.log_write(f"❌ DLL load failed: {e}", 'err')
+            return False
+
+        self.log_write("Parsing OTA binary...", 'info')
+        try:
+            with open(ota_path, 'rb') as _f:
+                _raw = _f.read(28)
+            _hdr_magic = struct.unpack('>I', _raw[0:4])[0]
+            if _hdr_magic == FOTA_OTA_PLAIN_MAGIC:
+                fw_model_id    = struct.unpack('>H', _raw[4:6])[0]
+                fw_ver         = (_raw[6], _raw[7], _raw[8])
+                comp_sz        = struct.unpack('>I', _raw[12:16])[0]
+                nonce          = _raw[16:28]
+                payload_offset = 28
+                model_name = FOTA_MODEL_NAMES.get(fw_model_id, f"0x{fw_model_id:04X}")
+                self.log_write(f"Model   : {model_name}", 'ok')
+                self.log_write(f"Version : {fw_ver[0]}.{fw_ver[1]}.{fw_ver[2]}", 'ok')
+                self.log_write(f"Comp sz : {comp_sz:,} bytes", 'ok')
+                self.log_write(f"Nonce   : {nonce.hex()}", 'ok')
+            else:
+                comp_size_c = ctypes.c_uint32(0)
+                nonce_buf   = ctypes.create_string_buffer(12)
+                ret = sa.GetOTAInfo(ota_path.encode(), ctypes.byref(comp_size_c), nonce_buf)
+                if ret != 0:
+                    raise RuntimeError("GetOTAInfo failed")
+                nonce          = nonce_buf.raw
+                comp_sz        = comp_size_c.value
+                fw_model_id    = 0x0001
+                fw_ver         = (1, 0, 0)
+                payload_offset = 0
+                self.log_write("OtaPlainHdr not found — using GetOTAInfo values", 'warn')
+                self.log_write(f"Comp sz : {comp_sz:,} bytes", 'ok')
+                self.log_write(f"Nonce   : {nonce.hex()}", 'ok')
+        except Exception as e:
+            self.log_write(f"❌ OTA parse failed: {e}", 'err')
+            return False
+
+        # ── Step 1: Connect CAN ───────────────────────────────────────────────
+        if progress_callback: progress_callback("step", 1, 6)
+        self.log_write(f"Connecting {self.interface} / channel {self.channel}...", 'info')
+        try:
+            if self.interface == "pcan":
+                bus = can.interface.Bus(
+                    interface="pcan",
+                    channel=f"PCAN_USBBUS{self.channel + 1}",
+                    bitrate=self.bitrate, fd=False)
+            else:
+                bus = can.interface.Bus(
+                    interface=self.interface,
+                    channel=self.channel,
+                    bitrate=self.bitrate)
+
+            addr = isotp.Address(isotp.AddressingMode.Normal_11bits,
+                                 rxid=FOTA_UDS_RX_ID, txid=FOTA_UDS_TX_ID)
+            try:
+                stack = isotp.CanStack(bus, address=addr)
+                if hasattr(stack, 'set_sleep_time'):
+                    stack.set_sleep_time(0.001)
+            except TypeError:
+                stack = isotp.CanStack(bus, address=addr)
+            self.log_write("CAN connected ✓", 'ok')
+        except Exception as e:
+            self.log_write(f"❌ CAN connect failed: {e}", 'err')
+            return False
+
+        def _uds(data, timeout=FOTA_TIMEOUT_NORMAL):
+            stack.send(data)
+            tx_end = time.time() + 5.0
+            while time.time() < tx_end:
+                stack.process()
+                if hasattr(stack, 'transmitting'):
+                    if not stack.transmitting():
+                        break
+                else:
+                    time.sleep(0.05)
+                    break
+                time.sleep(0.001)
+            dl = time.time() + timeout
+            while time.time() < dl:
+                if stop_event and stop_event.is_set():
+                    raise RuntimeError("Aborted by user")
+                stack.process()
+                if stack.available():
+                    r = bytes(stack.recv())
+                    if r[0] == 0x7F and len(r) >= 3 and r[2] == 0x78:
+                        self.log_write("[0x78] ECU busy, waiting...", 'warn')
+                        dl = time.time() + FOTA_TIMEOUT_TEXIT
+                        continue
+                    if r[0] == 0x7F:
+                        nrc = r[2] if len(r) >= 3 else 0
+                        raise RuntimeError(f"NRC 0x{nrc:02X} for SID 0x{data[0]:02X}")
+                    return r
+                time.sleep(0.001)
+            raise TimeoutError("No response from ECU")
+
+        try:
+            # ── Step 2: Programming session ───────────────────────────────────
+            if progress_callback: progress_callback("step", 2, 6)
+            self.log_write("Step 1 — Programming Session (app reset)...", 'info')
+            try:
+                stack.send(bytes([0x10, 0x02]))
+                t = time.time() + 0.08
+                while time.time() < t:
+                    stack.process(); time.sleep(0.001)
+            except Exception:
+                pass
+            time.sleep(2.0)
+
+            self.log_write("Catching bootloader...", 'info')
+            caught = False
+            for attempt in range(100):
+                if stop_event and stop_event.is_set():
+                    self.log_write("⛔ Cancelled", 'warn')
+                    return False
+                try:
+                    _uds(bytes([0x10, 0x02]), timeout=0.08)
+                    self.log_write(f"Bootloader caught ✓ (attempt {attempt+1})", 'ok')
+                    caught = True
+                    break
+                except Exception:
+                    pass
+                time.sleep(0.02)
+            if not caught:
+                _uds(bytes([0x10, 0x02]))
+
+            try:
+                flush_end = time.time() + 0.3
+                while time.time() < flush_end:
+                    stack.process()
+                    if stack.available():
+                        stack.recv()
+                    time.sleep(0.001)
+            except Exception:
+                pass
+
+            _uds(bytes([0x10, 0x02]))
+            self.log_write("Session OK ✓", 'ok')
+            time.sleep(0.1)
+
+            # ── Step 3: Security access ───────────────────────────────────────
+            if progress_callback: progress_callback("step", 3, 6)
+            self.log_write("Step 2 — Security Seed...", 'info')
+            resp = _uds(bytes([0x27, 0x01]))
+            seed = resp[2:6]
+            self.log_write(f"Seed: {seed.hex().upper()}", 'ok')
+
+            self.log_write("Step 3 — Computing Key...", 'info')
+            key_out = ctypes.create_string_buffer(4)
+            ret = sa.ComputeKey(seed, key_out)
+            if ret != 0:
+                raise RuntimeError("ComputeKey failed")
+            derived_key = key_out.raw
+            self.log_write(f"Key : {derived_key.hex().upper()}", 'ok')
+            _uds(bytes([0x27, 0x02]) + derived_key)
+            self.log_write("Security unlocked ✓", 'ok')
+
+            # ── Step 4: Erase + request download ─────────────────────────────
+            if progress_callback: progress_callback("step", 4, 6)
+            self.log_write("Step 4 — Erasing app slot...", 'warn')
+            erase_cmd = bytes([0x31, 0x01, 0xFF, 0x00,
+                               (fw_model_id >> 8) & 0xFF,
+                                fw_model_id       & 0xFF,
+                                fw_ver[0], fw_ver[1], fw_ver[2]])
+            _uds(erase_cmd, timeout=60.0)
+            self.log_write("Erase complete ✓", 'ok')
+
+            self.log_write("Step 5 — Request Download...", 'info')
+            addr_b = struct.pack('>I', FOTA_APP_START_ADDR)
+            size_b = struct.pack('>I', comp_sz)
+            resp   = _uds(bytes([0x34, 0x11, 0x44]) + addr_b + size_b + nonce)
+            max_blk = resp[2] if len(resp) >= 3 else 128
+            self.log_write(f"Download accepted ✓  maxBlock={max_blk}", 'ok')
+
+            # ── Step 5: Transfer data ─────────────────────────────────────────
+            if progress_callback: progress_callback("step", 5, 6)
+            self.log_write("Step 6 — Transferring data...", 'info')
+            with open(ota_path, 'rb') as _f:
+                _all = _f.read()
+            data  = _all[payload_offset:]
+            total = len(data)
+            seq   = 1
+            for i in range(0, total, max_blk):
+                if stop_event and stop_event.is_set():
+                    self.log_write("⛔ Cancelled", 'warn')
+                    return False
+                chunk = data[i:i + max_blk]
+                _uds(bytes([0x36, seq & 0xFF]) + chunk, timeout=15.0)
+                seq = (seq + 1) & 0xFF
+                if seq == 0:
+                    seq = 1
+                bytes_done = min(total, i + max_blk)
+                if progress_callback:
+                    progress_callback("block", bytes_done, total)
+                pct = int(bytes_done / total * 100)
+                if pct % 20 == 0 or bytes_done >= total:
+                    self.log_write(f"  {pct}% transferred", 'dim')
+            self.log_write("Transfer complete ✓", 'ok')
+
+            self.log_write("Step 7 — Transfer Exit (ECU verify, up to 5 min)...", 'warn')
+            _uds(bytes([0x37]), timeout=FOTA_TIMEOUT_TEXIT)
+            self.log_write("TransferExit OK ✓", 'ok')
+
+            self.log_write("Step 8 — Verify CRC...", 'info')
+            resp = _uds(bytes([0x31, 0x01, 0xFF, 0x01]))
+            if len(resp) < 5 or resp[4] != 0x01:
+                raise RuntimeError("CRC verification failed — ECU rejected firmware")
+            self.log_write("CRC PASS ✓", 'ok')
+
+            self.log_write("Step 9 — Writing Fingerprint...", 'info')
+            try:
+                _uds(bytes([0x3E, 0x00]))
+            except Exception:
+                pass
+            ts  = struct.pack(">I", int(time.time()))
+            sn  = b"FOTA_POC_1"
+            ver_bytes = bytes([0x02, 0x01, 0x00, 0x00])
+            _uds(bytes([0x2E, 0xF1, 0x5B]) + ts + sn + ver_bytes)
+            self.log_write("Fingerprint written ✓", 'ok')
+
+            self.log_write("Step 10 — ECU Reset...", 'info')
+            try:
+                _uds(bytes([0x11, 0x01]))
+            except Exception:
+                pass
+            self.log_write("ECU Reset sent ✓", 'ok')
+
+            if progress_callback:
+                progress_callback("complete", 1, 1)
+            self.log_write("🎉 FOTA Flash Complete!", 'ok')
+            return True
+
+        except RuntimeError as e:
+            self.log_write(f"❌ FAILED: {e}", 'err')
+            return False
+        except TimeoutError as e:
+            self.log_write(f"❌ TIMEOUT: {e}", 'err')
+            return False
+        except Exception as e:
+            self.log_write(f"❌ ERROR: {e}", 'err')
+            return False
+        finally:
+            try:
+                bus.shutdown()
+            except Exception:
+                pass
+            self.log_write("🔌 CAN Bus closed.")

@@ -8,7 +8,7 @@ import traceback
 import ctypes
 
 import subprocess
-from flashing_logic import FlashingLogic, PumpFlashingLogic, PUMP_CAN_CONFIG
+from flashing_logic import FlashingLogic, PumpFlashingLogic, PUMP_CAN_CONFIG, FOTAFlashingLogic
 
 APP_NAME = "JSW FlashXpert"
 APP_VERSION = "V1.2"
@@ -28,6 +28,35 @@ CONTROLLER_LIST = [
 
 # Controllers that use the pump protocol instead of UDS
 PUMP_CONTROLLERS = {"JSW Air Pump", "JSW Oil Pump"}
+
+# Sidebar step definitions per phase
+PHASE1_STEPS = [
+    {"label": "Secure Connection", "icon": "⚡"},
+    {"label": "Erased",            "icon": "♻"},
+    {"label": "Downloaded",        "icon": "⬇"},
+    {"label": "Programming",       "icon": "⚙"},
+    {"label": "Verified",          "icon": "✔"},
+    {"label": "ECU Reset",         "icon": "↻"},
+]
+
+PHASE2_STEPS = [
+    {"label": "Init",              "icon": "⚡"},
+    {"label": "Connect CAN",       "icon": "⚡"},
+    {"label": "Session",           "icon": "⚙"},
+    {"label": "Security",          "icon": "✔"},
+    {"label": "Transfer",          "icon": "⬇"},
+    {"label": "Complete",          "icon": "↻"},
+]
+
+# Tag → foreground colour for Phase 2 coloured log
+FOTA_LOG_COLOURS = {
+    'ok':   "#27AE60",
+    'err':  "#E74C3C",
+    'info': "#154385",
+    'warn': "#E67E22",
+    'dim':  "#7F8C8D",
+    '':     "#FFFFFF",
+}
 
 
 def resource_path(relative_path):
@@ -280,17 +309,31 @@ class FlashingApp(tk.Tk):
         )
         self.version_label.place(x=180 + title_width + 12, y=45)
 
+        # --- PHASE TAB BAR ---
+        self.current_phase = 1
+        tab_bar = tk.Frame(self, bg="#163c69", height=36)
+        tab_bar.place(x=0, y=90, width=1100, height=36)
+
+        self._ph1_btn = tk.Button(
+            tab_bar, text="⚡  Phase 1 — JSW Flashing",
+            font=("Segoe UI", 11, "bold"),
+            bg="#1f4e96", fg="white",
+            relief="flat", cursor="hand2", padx=18,
+            command=lambda: self._switch_phase(1))
+        self._ph1_btn.pack(side="left", fill="y", pady=2, padx=(8, 2))
+
+        self._ph2_btn = tk.Button(
+            tab_bar, text="🚀  Phase 2 — VCU FOTA",
+            font=("Segoe UI", 11, "bold"),
+            bg="#163c69", fg="#93C5FD",
+            relief="flat", cursor="hand2", padx=18,
+            command=lambda: self._switch_phase(2))
+        self._ph2_btn.pack(side="left", fill="y", pady=2)
+
         # --- SIDEBAR: VERTICAL STEP ICONS ---
         self.sidebar_frame = tk.Frame(self, bg="#f6f8fb")
-        self.sidebar_frame.place(x=0, y=90, width=170, height=580)
-        self.steps = [
-            {"label": "Secure Connection", "icon": "⚡"},
-            {"label": "Erased",            "icon": "♻"},
-            {"label": "Downloaded",        "icon": "⬇"},
-            {"label": "Programming",       "icon": "⚙"},
-            {"label": "Verified",          "icon": "✔"},
-            {"label": "ECU Reset",         "icon": "↻"},
-        ]
+        self.sidebar_frame.place(x=0, y=126, width=170, height=544)
+        self.steps = list(PHASE1_STEPS)
         self.current_step = 0
         self.completed_steps = set()
         self.step_labels = []
@@ -309,9 +352,9 @@ class FlashingApp(tk.Tk):
             self.step_labels.append(text_label)
         self.update_progress_tracker()
 
-        # --- MAIN CONTROLS ---
+        # --- MAIN CONTROLS (Phase 1) ---
         self.main_frame = tk.Frame(self, bg="#fff")
-        self.main_frame.place(x=180, y=100, width=880, height=610)
+        self.main_frame.place(x=180, y=126, width=880, height=574)
 
         self.controller_label = tk.Label(self.main_frame, text="Select ECU", font=("Segoe UI", 14, "bold"), bg="#fff", fg="#1f355e")
         self.controller_label.place(x=30, y=15)
@@ -414,6 +457,126 @@ class FlashingApp(tk.Tk):
                                               font=("Segoe UI", 10))
             self.footer_logo_label.grid(row=0, column=1, sticky="e", padx=(5, 10))
 
+        # --- PHASE 2 FRAME (VCU FOTA) ---
+        self.phase2_frame = tk.Frame(self, bg="#F5F7FA")
+        # (not placed yet — shown only when phase 2 is active)
+
+        p2 = self.phase2_frame
+
+        # Section helper
+        def _p2_sec(text):
+            tk.Label(p2, text=text, font=("Segoe UI", 9, "bold"),
+                     fg="#6B7280", bg="#F5F7FA").pack(anchor="w", padx=16, pady=(10, 2))
+        def _p2_card():
+            f = tk.Frame(p2, bg="#FFFFFF",
+                         highlightbackground="#E5E7EB", highlightthickness=1)
+            f.pack(fill="x", padx=16, pady=0)
+            return f
+
+        # OTA Files card
+        _p2_sec("OTA Files")
+        files_card = _p2_card()
+
+        def _file_row(parent, label, var, ftypes, callback=None):
+            row = tk.Frame(parent, bg="#FFFFFF")
+            row.pack(fill="x", padx=14, pady=5)
+            tk.Label(row, text=label, font=("Segoe UI", 10),
+                     fg="#6B7280", bg="#FFFFFF", width=14, anchor="w").pack(side="left")
+            ent = tk.Entry(row, textvariable=var, font=("Consolas", 9),
+                           state="readonly", relief="solid", bd=1, width=42)
+            ent.pack(side="left", padx=(0, 8))
+            def _browse(v=var, ft=ftypes, cb=callback):
+                path = filedialog.askopenfilename(filetypes=ft)
+                if path:
+                    v.set(path)
+                    if cb:
+                        cb(path)
+            tk.Button(row, text="Browse",
+                      font=("Segoe UI", 9, "bold"),
+                      bg="#EFF6FF", fg="#2563EB",
+                      relief="flat", cursor="hand2", padx=10,
+                      command=_browse).pack(side="left")
+
+        self.fota_ota_var = tk.StringVar()
+        self.fota_dll_var = tk.StringVar()
+
+        def _on_ota_selected(path):
+            size = os.path.getsize(path)
+            self.fota_info_var.set(
+                f"OTA binary: {size:,} bytes  ({size // 1024} KB) — ready")
+            self.fota_info_lbl.config(fg="#27AE60")
+
+        _file_row(files_card, "OTA Binary", self.fota_ota_var,
+                  [("OTA Binary", "*.bin"), ("All", "*.*")], _on_ota_selected)
+        _file_row(files_card, "Security DLL", self.fota_dll_var,
+                  [("DLL", "*.dll"), ("All", "*.*")])
+
+        self.fota_info_var = tk.StringVar(value="Select OTA binary to begin")
+        self.fota_info_lbl = tk.Label(files_card, textvariable=self.fota_info_var,
+                                      font=("Segoe UI", 9), fg="#6B7280", bg="#FFFFFF", anchor="w")
+        self.fota_info_lbl.pack(fill="x", padx=14, pady=(0, 8))
+
+        # CAN card (shows current Phase 1 selection, read-only info)
+        _p2_sec("CAN Interface  (uses hardware selected on Phase 1)")
+        can_info_card = _p2_card()
+        self.fota_can_info_var = tk.StringVar(value="")
+        tk.Label(can_info_card, textvariable=self.fota_can_info_var,
+                 font=("Segoe UI", 10), fg="#2563EB", bg="#FFFFFF", anchor="w",
+                 padx=14, pady=8).pack(fill="x")
+
+        # Progress card
+        _p2_sec("Progress")
+        prog_card = _p2_card()
+        self.fota_step_var = tk.StringVar(value="Ready")
+        tk.Label(prog_card, textvariable=self.fota_step_var,
+                 font=("Segoe UI", 10, "bold"), fg="#2563EB", bg="#FFFFFF",
+                 anchor="w", padx=14).pack(fill="x", pady=(8, 2))
+        self.fota_progress = ttk.Progressbar(prog_card, mode="determinate",
+                                             maximum=100, value=0)
+        self.fota_progress.pack(fill="x", padx=14, pady=(0, 4))
+        self.fota_pct_var = tk.StringVar(value="0%")
+        tk.Label(prog_card, textvariable=self.fota_pct_var,
+                 font=("Segoe UI", 10, "bold"), fg="#163c69", bg="#FFFFFF",
+                 anchor="w", padx=14).pack(fill="x", pady=(0, 8))
+
+        # Buttons
+        btn_row2 = tk.Frame(p2, bg="#F5F7FA")
+        btn_row2.pack(fill="x", padx=16, pady=(10, 6))
+        self.fota_start_btn = tk.Button(btn_row2,
+            text="▶  FLASH VCU FIRMWARE",
+            font=("Segoe UI", 11, "bold"),
+            bg="#2563EB", fg="white",
+            relief="flat", cursor="hand2", pady=10,
+            command=self._start_fota_flash)
+        self.fota_start_btn.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.fota_stop_btn = tk.Button(btn_row2,
+            text="■  Stop",
+            font=("Segoe UI", 11, "bold"),
+            bg="#6B7280", fg="white",
+            relief="flat", cursor="hand2", pady=10,
+            state="disabled",
+            command=self._stop_fota_flash)
+        self.fota_stop_btn.pack(side="left", width=120)
+
+        # Log card
+        _p2_sec("Log")
+        log_card2 = _p2_card()
+        self.fota_log_box = tk.Text(log_card2, height=8,
+                                    font=("Consolas", 10),
+                                    bg="#1E2A3A", fg="#FFFFFF",
+                                    relief="flat", bd=4,
+                                    state="disabled", wrap="word")
+        self.fota_log_box.pack(fill="both", expand=True, padx=8, pady=8)
+        for tag, col in FOTA_LOG_COLOURS.items():
+            self.fota_log_box.tag_config(tag, foreground=col)
+
+        # Status row
+        self.fota_status_var = tk.StringVar(value="Status: Idle")
+        tk.Label(p2, textvariable=self.fota_status_var,
+                 font=("Segoe UI", 11, "bold"), bg="#F5F7FA", fg="#1f355e",
+                 anchor="w").pack(fill="x", padx=16, pady=(4, 0))
+
+        # -------------------------------------------------------
         self.flashing_logic = None
         self.flashing_thread = None
         self.log_file_path = None
@@ -421,6 +584,7 @@ class FlashingApp(tk.Tk):
         self._elapsed_timer_running = False
         self._ign_dlg = None
         self.cancel_event = None
+        self.fota_cancel_event = None
 
     # ── Progress tracker ──────────────────────────────────────────────────────
 
@@ -437,6 +601,151 @@ class FlashingApp(tk.Tk):
                 icon = self.steps[i]["icon"]
             self.step_icon_labels[i].config(fg=color, text=icon)
             self.step_labels[i].config(fg=color)
+
+    # ── Phase switching ───────────────────────────────────────────────────────
+
+    def _switch_phase(self, phase):
+        if phase == self.current_phase:
+            return
+        self.current_phase = phase
+
+        if phase == 1:
+            self.phase2_frame.place_forget()
+            self.main_frame.place(x=180, y=126, width=880, height=574)
+            self.steps = list(PHASE1_STEPS)
+            self._ph1_btn.config(bg="#1f4e96", fg="white")
+            self._ph2_btn.config(bg="#163c69", fg="#93C5FD")
+        else:
+            self.main_frame.place_forget()
+            self.phase2_frame.place(x=180, y=126, width=880, height=574)
+            self.steps = list(PHASE2_STEPS)
+            self._ph2_btn.config(bg="#1f4e96", fg="white")
+            self._ph1_btn.config(bg="#163c69", fg="#93C5FD")
+            # Refresh CAN info label
+            self.fota_can_info_var.set(
+                f"Hardware: {self.can_var.get()}  "
+                f"({CAN_INTERFACE_MAP[self.can_var.get()]['interface']}  "
+                f"{CAN_INTERFACE_MAP[self.can_var.get()]['bitrate']} bps)")
+
+        self.current_step = 0
+        self.completed_steps.clear()
+        self.update_progress_tracker()
+
+    # ── FOTA flash ────────────────────────────────────────────────────────────
+
+    def fota_log_write(self, msg, tag=''):
+        ts = time.strftime("[%H:%M:%S] ")
+        self.fota_log_box.config(state="normal")
+        self.fota_log_box.insert("end", ts + msg + "\n", tag)
+        self.fota_log_box.see("end")
+        self.fota_log_box.config(state="disabled")
+
+    def _start_fota_flash(self):
+        ota = self.fota_ota_var.get()
+        dll = self.fota_dll_var.get()
+        if not ota or not os.path.exists(ota):
+            messagebox.showerror("Error", "Please select a valid OTA binary file.")
+            return
+        if not dll or not os.path.exists(dll):
+            messagebox.showerror("Error", "Please select a valid SecurityAccess.dll file.")
+            return
+
+        can_params = CAN_INTERFACE_MAP.get(self.can_var.get())
+        if not can_params:
+            messagebox.showerror("Error", "Unknown CAN interface.")
+            return
+
+        self.fota_cancel_event = threading.Event()
+        self.fota_log_box.config(state="normal")
+        self.fota_log_box.delete("1.0", "end")
+        self.fota_log_box.config(state="disabled")
+        self.fota_progress["value"] = 0
+        self.fota_pct_var.set("0%")
+        self.current_step = 0
+        self.completed_steps.clear()
+        self.update_progress_tracker()
+
+        self.fota_start_btn.config(state="disabled", bg="#93C5FD")
+        self.fota_stop_btn.config(state="normal")
+        self.fota_status_var.set("Status: Flashing...")
+        self.fota_step_var.set("Starting...")
+
+        self.flashing_logic = FOTAFlashingLogic(
+            interface=can_params["interface"],
+            channel=can_params["channel"],
+            bitrate=can_params["bitrate"],
+            log_callback=self.fota_log_write,
+        )
+
+        threading.Thread(
+            target=self._fota_flash_process,
+            args=(ota, dll),
+            daemon=True
+        ).start()
+
+    def _stop_fota_flash(self):
+        if self.fota_cancel_event:
+            self.fota_cancel_event.set()
+        self.fota_stop_btn.config(state="disabled")
+        self.fota_log_write("⛔ Stop requested...", 'warn')
+        self.fota_status_var.set("Status: Cancelling...")
+
+    def _fota_flash_process(self, ota_path, dll_path):
+        try:
+            def step_cb(event, current, total):
+                if event == "step":
+                    self.current_step = min(current, len(self.steps) - 1)
+                    self.completed_steps.add(self.current_step)
+                    self.update_progress_tracker()
+                    step_name = self.steps[self.current_step]["label"]
+                    self.fota_step_var.set(f"Step {current + 1} — {step_name}")
+                    self.fota_status_var.set(f"Status: {step_name}")
+                elif event == "block":
+                    pct = int(current / total * 100) if total else 0
+                    self.fota_progress["value"] = pct
+                    self.fota_pct_var.set(f"{pct}%")
+                elif event == "complete":
+                    for i in range(len(self.steps)):
+                        self.completed_steps.add(i)
+                    self.update_progress_tracker()
+                    self.fota_progress["value"] = 100
+                    self.fota_pct_var.set("100%")
+                    self.fota_step_var.set("✓  FLASH COMPLETE")
+
+            ok = self.flashing_logic.flash_firmware(
+                ota_path=ota_path,
+                dll_path=dll_path,
+                progress_callback=step_cb,
+                stop_event=self.fota_cancel_event,
+            )
+
+            if ok:
+                self.fota_status_var.set("Status: Completed ✓")
+                self.fota_start_btn.config(state="normal", bg="#27AE60",
+                                           text="✓  FLASH COMPLETE")
+                self.after(0, lambda: messagebox.showinfo(
+                    "FOTA Complete",
+                    "VCU FOTA flash completed successfully!\n\nECU is rebooting to new firmware."))
+            else:
+                if self.fota_cancel_event and self.fota_cancel_event.is_set():
+                    self.fota_status_var.set("Status: Cancelled")
+                    self.fota_start_btn.config(state="normal", bg="#2563EB",
+                                               text="▶  FLASH VCU FIRMWARE")
+                else:
+                    self.fota_status_var.set("Status: Failed")
+                    self.fota_start_btn.config(state="normal", bg="#E74C3C",
+                                               text="✗  FAILED — Try Again")
+                    self.after(0, lambda: messagebox.showerror(
+                        "FOTA Failed",
+                        "FOTA flash failed. Check the log for details."))
+        except Exception as e:
+            self.fota_status_var.set("Status: Error")
+            self.fota_log_write(f"❌ Exception: {e}", 'err')
+            self.fota_start_btn.config(state="normal", bg="#E74C3C",
+                                       text="✗  ERROR — Try Again")
+            self.after(0, lambda: messagebox.showerror("Error", str(e)))
+        finally:
+            self.fota_stop_btn.config(state="disabled")
 
     # ── File / log helpers ────────────────────────────────────────────────────
 
