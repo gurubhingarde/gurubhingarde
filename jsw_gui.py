@@ -551,7 +551,7 @@ class FlashingApp(tk.Tk):
             pump_type=pump_type,
             interface=can_params["interface"],
             channel=can_params["channel"],
-            bitrate=500000,   # pumps always use 500 kbps
+            bitrate=can_params["bitrate"],
             log_callback=self.log_write,
         )
         self.log_write(f"▶ Starting {pump_type} flash (ECU can be live or powered on now)...")
