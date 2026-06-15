@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
 import time
-import can
+from flashing_logic import CANBusWrapper
 
 
 # ── Protocol constants ────────────────────────────────────────────────────────
@@ -63,8 +63,9 @@ def full_erase(pump_type, interface, channel, bitrate, log_fn, progress_fn, stop
     ecu_id   = cfg["ecu_id"]
     ecu_addr = cfg["ecu_addr"]
 
+    iface = interface if interface != "peak" else "pcan"
     try:
-        bus = can.interface.Bus(interface=interface, channel=channel, bitrate=bitrate)
+        bus = CANBusWrapper(iface, channel, bitrate)
     except Exception as e:
         log_fn(f"❌ CAN open failed: {e}")
         return False
@@ -77,16 +78,15 @@ def full_erase(pump_type, interface, channel, bitrate, log_fn, progress_fn, stop
         for b in bcast_raw:
             bcast_xor ^= b
         bcast_frame = bcast_raw + bytes([bcast_xor])
-        bus.send(can.Message(arbitration_id=BCAST_ID,
-                             data=bcast_frame, is_extended_id=True))
+        bus.send(BCAST_ID, list(bcast_frame), is_extended_id=True)
         log_fn(f"  Broadcast sent: {bcast_frame.hex().upper()}")
 
         bcast_acked = False
         deadline = time.time() + 0.5
         while time.time() < deadline:
             rx = bus.recv(timeout=0.05)
-            if rx and rx.arbitration_id == ecu_id:
-                d = bytes(rx.data)
+            if rx and rx['arbitration_id'] == ecu_id:
+                d = bytes(rx['data'])
                 if d[0] == 0xFF and d[1] == 0x82:
                     log_fn(f"  Broadcast ACK ✓  ({d.hex().upper()})")
                     bcast_acked = True
@@ -106,11 +106,10 @@ def full_erase(pump_type, interface, channel, bitrate, log_fn, progress_fn, stop
             if stop_evt.is_set():
                 log_fn("⛔ Cancelled")
                 return False
-            bus.send(can.Message(arbitration_id=tool_id,
-                                 data=list(hb_data), is_extended_id=True))
+            bus.send(tool_id, list(hb_data), is_extended_id=True)
             rx = bus.recv(timeout=0.08)
-            if rx and rx.arbitration_id == ecu_id:
-                log_fn(f"  ECU responded ✓  ({bytes(rx.data).hex().upper()})")
+            if rx and rx['arbitration_id'] == ecu_id:
+                log_fn(f"  ECU responded ✓  ({bytes(rx['data']).hex().upper()})")
                 ecu_woke = True
                 break
             time.sleep(max(0, HEARTBEAT_INTERVAL - 0.08))
@@ -128,15 +127,14 @@ def full_erase(pump_type, interface, channel, bitrate, log_fn, progress_fn, stop
             log_fn(f"  Erasing sector {idx+1}/{len(ERASE_SECTORS)}  "
                    f"0x{sector_addr:08X} — 0x{sector_addr + ADDR_STEP - 1:08X}  (8 KB)...")
             erase_frame = make_frame(0x04, addr_payload(sector_addr, ADDR_STEP))
-            bus.send(can.Message(arbitration_id=tool_id,
-                                 data=list(erase_frame), is_extended_id=True))
+            bus.send(tool_id, list(erase_frame), is_extended_id=True)
             acked = False
             deadline = time.time() + ERASE_TIMEOUT
             while time.time() < deadline:
                 rx = bus.recv(timeout=0.1)
                 if not rx:
                     continue
-                if rx.arbitration_id == ecu_id and bytes(rx.data) == erase_frame:
+                if rx['arbitration_id'] == ecu_id and bytes(rx['data']) == erase_frame:
                     log_fn(f"    ✅ Erase ACK")
                     acked = True
                     break
@@ -195,9 +193,9 @@ class EraseApp(tk.Tk):
         # CAN interface
         tk.Label(form, text="CAN Interface", font=("Segoe UI", 11, "bold"),
                  bg="#f6f8fb", fg="#1f355e").grid(row=1, column=0, sticky="w", pady=8)
-        self.iface_var = tk.StringVar(value="pcan")
+        self.iface_var = tk.StringVar(value="peak")
         ttk.Combobox(form, textvariable=self.iface_var,
-                     values=["pcan", "vector", "kvaser", "socketcan"],
+                     values=["peak", "vector", "kvaser"],
                      state="readonly", width=22,
                      font=("Segoe UI", 11)).grid(row=1, column=1, padx=10, pady=8, sticky="w")
 
