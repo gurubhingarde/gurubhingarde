@@ -463,8 +463,13 @@ def _pump_addr_payload(full_addr, size):
     ])
 
 def _pump_load_hex(path):
-    """Same sequential reader as the standalone air pump tool — proven to work
-    with all 3 firmware versions for both Air Pump and Oil Pump."""
+    """Parse Intel HEX firmware for pump ECUs.
+
+    Returns (firmware, crc_bytes, crc_addr, base_addr, oem_blocks, fw_size).
+    oem_blocks is None for normal sequential hex files; for files with stride
+    anomalies (like Oil Pump VER1) it is a list of block dicts so the OEM
+    flashing sequence can be reproduced exactly.
+    """
     records = []
     with open(path) as f:
         for line in f:
@@ -494,23 +499,98 @@ def _pump_load_hex(path):
     if base_addr is None:
         raise ValueError("No data records found in hex file")
 
-    seq = bytearray()
-    ela = 0
+    # Detect stride anomalies (skip the gap between last data record and CRC)
+    has_anomaly = False
+    ela = 0; prev_bc2 = None; prev_full2 = None
     for bc, addr, rt, data in records:
         if rt == 4:
             ela = int.from_bytes(data, "big") << 16
+            prev_bc2 = None; prev_full2 = None
         elif rt == 0:
-            seq += data
+            full_addr = ela | addr
+            if (prev_bc2 is not None and prev_full2 is not None and
+                    full_addr != crc_addr and
+                    (full_addr - prev_full2) > prev_bc2 // 2):
+                has_anomaly = True
+                break
+            prev_bc2 = bc; prev_full2 = full_addr
         elif rt == 1:
             break
 
-    crc_bytes = bytes(seq[-4:])
-    firmware  = bytes(seq[:-4])
-    return firmware, crc_bytes, crc_addr, base_addr
+    if has_anomaly:
+        oem_blocks, crc_bytes = _pump_build_oem_blocks(records, crc_addr)
+        firmware_size = sum(b["size"] for b in oem_blocks)
+        return None, crc_bytes, crc_addr, base_addr, oem_blocks, firmware_size
+    else:
+        seq = bytearray(); ela = 0
+        for bc, addr, rt, data in records:
+            if rt == 4:
+                ela = int.from_bytes(data, "big") << 16
+            elif rt == 0:
+                seq += data
+            elif rt == 1:
+                break
+        crc_bytes = bytes(seq[-4:])
+        firmware  = bytes(seq[:-4])
+        return firmware, crc_bytes, crc_addr, base_addr, None, len(firmware)
 
 
-def _pump_build_blocks(firmware, base_addr):
-    """Same block builder as the standalone air pump tool."""
+def _pump_build_oem_blocks(records, crc_addr):
+    """Build blocks replicating OEM tool behaviour for stride-anomaly hex files."""
+    blocks = []
+    cur_addr = None; cur_data = bytearray(); cur_sector = -1
+    prev_bc = None; prev_full = None; prev_ela = None; ela = 0; crc_bytes = None
+
+    for bc, addr, rt, data in records:
+        if rt == 4:
+            new_ela = int.from_bytes(data, "big") << 16
+            if prev_ela is not None and new_ela != prev_ela and cur_addr is not None:
+                blocks.append({"addr": cur_addr, "data": bytes(cur_data), "size": len(cur_data)})
+                cur_addr = None; cur_data = bytearray(); cur_sector = -1
+                prev_bc = None; prev_full = None
+            ela = new_ela; prev_ela = new_ela; continue
+        if rt == 1:
+            break
+        if rt != 0:
+            continue
+        full_addr = ela | addr
+        if full_addr == crc_addr and bc == 4:
+            if cur_addr is not None:
+                blocks.append({"addr": cur_addr, "data": bytes(cur_data), "size": len(cur_data)})
+            crc_bytes = bytes(data); break
+        sector = (full_addr // _PUMP_ADDR_STEP) * _PUMP_ADDR_STEP
+        stride_anomaly = (prev_bc is not None and prev_full is not None and
+                          (full_addr - prev_full) > prev_bc // 2)
+        if cur_addr is None or sector != cur_sector or stride_anomaly:
+            if cur_addr is not None:
+                blocks.append({"addr": cur_addr, "data": bytes(cur_data), "size": len(cur_data)})
+            cur_addr = full_addr; cur_data = bytearray(data); cur_sector = sector
+        else:
+            cur_data += data
+        prev_bc = bc; prev_full = full_addr
+
+    # Assign block IDs matching OEM tool logic
+    prev_id = None; prev_sector = None
+    for i, blk in enumerate(blocks):
+        is_last = (i == len(blocks) - 1)
+        sector = (blk["addr"] // _PUMP_ADDR_STEP) * _PUMP_ADDR_STEP
+        if is_last:
+            blk["block_id"] = 1
+        elif prev_id is None:
+            blk["block_id"] = (_PUMP_BLOCK_ID_BASE - blk["addr"]) // _PUMP_ADDR_STEP
+        elif sector == prev_sector:
+            blk["block_id"] = prev_id - 1
+        elif blk["size"] == 16384:
+            blk["block_id"] = (_PUMP_BLOCK_ID_BASE - blk["addr"]) // _PUMP_ADDR_STEP
+        else:
+            blk["block_id"] = prev_id
+        prev_id = blk["block_id"]; prev_sector = sector
+
+    return blocks, crc_bytes
+
+
+def _pump_build_blocks_sequential(firmware, base_addr):
+    """Sequential block builder for normal (no stride anomaly) hex files."""
     blocks = []
     total  = -(-len(firmware) // _PUMP_MAX_BLOCK)
     offset, addr = 0, base_addr
@@ -578,17 +658,22 @@ class PumpFlashingLogic:
         # ── Load hex ────────────────────────────────────────────────────────
         self.log_write("Loading hex file...")
         try:
-            firmware, crc_bytes, crc_addr, base_addr = _pump_load_hex(firmware_path)
+            firmware, crc_bytes, crc_addr, base_addr, oem_blocks, fw_size = \
+                _pump_load_hex(firmware_path)
         except Exception as e:
             self.log_write(f"❌ Error loading hex: {e}")
             return False
 
         crc_int = int.from_bytes(crc_bytes, "big")
-        self.log_write(f"  Firmware : {len(firmware):,} bytes")
+        self.log_write(f"  Firmware : {fw_size:,} bytes")
         self.log_write(f"  Base addr: 0x{base_addr:08X}")
         self.log_write(f"  CRC      : 0x{crc_int:08X}  at 0x{crc_addr:08X}")
 
-        blocks = _pump_build_blocks(firmware, base_addr)
+        if oem_blocks is not None:
+            self.log_write(f"  Mode     : OEM block parser (stride anomalies detected)")
+            blocks = oem_blocks
+        else:
+            blocks = _pump_build_blocks_sequential(firmware, base_addr)
         self.log_write(f"  Blocks   : {len(blocks)}")
         for b in blocks:
             self.log_write(f"    0x{b['addr']:08X}  {b['size']:5d} B  id=0x{b['block_id']:02X}")
