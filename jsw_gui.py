@@ -22,12 +22,12 @@ CAN_INTERFACE_MAP = {
 }
 
 CONTROLLER_LIST = [
-    "JSW EVCU", "JSW MCU", "JSW DCDC", "JSW Aux INV-1", "JSW Aux INV-2",
-    "Air Pump", "Oil Pump",
+    "JSW EVCU", "JSW MCU", "JSW DCDC",
+    "JSW Air Pump", "JSW Oil Pump",
 ]
 
 # Controllers that use the pump protocol instead of UDS
-PUMP_CONTROLLERS = {"Air Pump", "Oil Pump"}
+PUMP_CONTROLLERS = {"JSW Air Pump", "JSW Oil Pump"}
 
 
 def resource_path(relative_path):
@@ -555,6 +555,7 @@ class FlashingApp(tk.Tk):
             log_callback=self.log_write,
         )
         self._ign_dlg = IgnitionDialog(self)
+        self._ign_dlg.msg_var.set("Please TURN OFF power and click OK.")
 
         def _on_stop():
             try: self.cancel_event.set()
@@ -565,8 +566,13 @@ class FlashingApp(tk.Tk):
             self.status_var.set("Status: Cancelled by user")
 
         def _on_ok_clicked():
-            self._ign_dlg.transition_to_on(_on_stop)
-            self.log_write(f"Waiting for {pump_type} ignition ON... (up to 100 s)")
+            self._ign_dlg.msg_var.set(
+                "Now TURN ON power and wait.\n\nFlashing will start automatically when the controller responds."
+            )
+            self._ign_dlg.ok_btn.config(text="Stop", state="normal", command=_on_stop)
+            self._ign_dlg.glass_var.set("⌛")
+            self._ign_dlg.timer_var.set("100 s remaining")
+            self.log_write(f"Waiting for {pump_type} power ON... (up to 100 s)")
             self._ign_dlg.start_countdown(
                 total_seconds=100,
                 stop_flag_getter=lambda: self.cancel_event.is_set(),

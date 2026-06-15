@@ -432,8 +432,8 @@ _PUMP_LAST_FRAME_TIMEOUT = 1.0
 
 # CAN IDs per pump type
 PUMP_CAN_CONFIG = {
-    "Air Pump": {"tool_id": 0x180006FF, "ecu_id": 0x1800FF06},
-    "Oil Pump": {"tool_id": 0x180005FF, "ecu_id": 0x1800FF05},
+    "JSW Air Pump": {"tool_id": 0x180006FF, "ecu_id": 0x1800FF06},
+    "JSW Oil Pump": {"tool_id": 0x180005FF, "ecu_id": 0x1800FF05},
 }
 _PUMP_BCAST_ID  = 0x1800FFFF
 _PUMP_NAK_ID    = 0x1800EEEE
