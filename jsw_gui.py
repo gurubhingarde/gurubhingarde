@@ -637,12 +637,12 @@ class FlashingApp(tk.Tk):
             def step_callback(event, current, total):
                 if event == "step":
                     self.current_step = min(current, len(self.steps) - 1)
+                    self.completed_steps.add(self.current_step)
                     self.update_progress_tracker()
                     if self.current_step < 3:
                         self.progress["value"] = 0
                         self.percent_var.set("0%")
                     self.status_var.set(f"Status: {self.steps[self.current_step]['label']}")
-                    self.completed_steps.add(self.current_step)
                     if current == 1 and self._ign_dlg is not None:
                         self.after(0, self._ign_dlg.auto_close)
                 elif event == "block":
@@ -651,6 +651,9 @@ class FlashingApp(tk.Tk):
                     self.percent_var.set(f"{block_percent}%")
                     self.status_var.set("Status: Programming")
                 elif event == "complete":
+                    for i in range(len(self.steps)):
+                        self.completed_steps.add(i)
+                    self.update_progress_tracker()
                     self.progress["value"] = 100
                     self.percent_var.set("100%")
                     self.status_var.set("Status: Completed")
