@@ -15,6 +15,9 @@ CHUNK_SIZE = 3200  # UDS block size
 # -----------------------------
 class CANBusWrapper:
     def __init__(self, interface, channel=0, bitrate=250000):
+        # accept both "peak" and "pcan" as aliases
+        if interface == "peak":
+            interface = "pcan"
         self.interface = interface
         self.channel = channel
         self.bitrate = bitrate
