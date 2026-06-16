@@ -75,11 +75,8 @@ PUMP_CHANNELS = {
     "JSW Air Pump": AIR_CHANNELS,
 }
 
-CAN_INTERFACE_MAP = {
-    "Peak":   {"interface": "peak",   "channel": 0, "bitrate": 250000},
-    "Vector": {"interface": "vector", "channel": 0, "bitrate": 250000},
-    "Kvaser": {"interface": "kvaser", "channel": 0, "bitrate": 250000},
-}
+CAN_INTERFACES = ["Peak", "Vector", "Kvaser"]
+PEAK_CHANNELS  = ["PCAN_USBBUS1", "PCAN_USBBUS2", "PCAN_USBBUS3"]  # channel index 0,1,2
 
 BG      = "#F5F7FA"
 BG2     = "#FFFFFF"
@@ -139,23 +136,34 @@ class PumpMonitorApp(tk.Tk):
         ttk.Combobox(inner, textvariable=self._pump_var,
                      values=list(PUMP_CHANNELS.keys()),
                      state="readonly", width=16,
-                     font=("Segoe UI", 10)).pack(side="left", padx=(4, 20))
+                     font=("Segoe UI", 10)).pack(side="left", padx=(4, 16))
 
         tk.Label(inner, text="Hardware", font=("Segoe UI", 10),
                  fg=GREY, bg=BG2).pack(side="left")
         self._iface_var = tk.StringVar(value="Peak")
-        ttk.Combobox(inner, textvariable=self._iface_var,
-                     values=list(CAN_INTERFACE_MAP.keys()),
-                     state="readonly", width=10,
-                     font=("Segoe UI", 10)).pack(side="left", padx=(4, 20))
+        iface_cb = ttk.Combobox(inner, textvariable=self._iface_var,
+                     values=CAN_INTERFACES,
+                     state="readonly", width=8,
+                     font=("Segoe UI", 10))
+        iface_cb.pack(side="left", padx=(4, 8))
+        iface_cb.bind("<<ComboboxSelected>>", self._on_iface_changed)
+
+        tk.Label(inner, text="Channel", font=("Segoe UI", 10),
+                 fg=GREY, bg=BG2).pack(side="left")
+        self._chan_var = tk.StringVar(value="PCAN_USBBUS1")
+        self._chan_cb = ttk.Combobox(inner, textvariable=self._chan_var,
+                     values=PEAK_CHANNELS,
+                     state="readonly", width=14,
+                     font=("Segoe UI", 10))
+        self._chan_cb.pack(side="left", padx=(4, 16))
 
         tk.Label(inner, text="Bitrate", font=("Segoe UI", 10),
                  fg=GREY, bg=BG2).pack(side="left")
         self._baud_var = tk.StringVar(value="250000")
         ttk.Combobox(inner, textvariable=self._baud_var,
                      values=["250000", "500000"],
-                     state="readonly", width=10,
-                     font=("Segoe UI", 10)).pack(side="left", padx=(4, 20))
+                     state="readonly", width=9,
+                     font=("Segoe UI", 10)).pack(side="left", padx=(4, 16))
 
         self._start_btn = tk.Button(inner, text="▶  Start",
                                     font=("Segoe UI", 10, "bold"),
@@ -243,6 +251,31 @@ class PumpMonitorApp(tk.Tk):
                                     tags=("ok",))
             self._row_ids[ch_idx] = iid
 
+    # ── Interface helper ──────────────────────────────────────────────────────
+
+    def _on_iface_changed(self, _event=None):
+        iface = self._iface_var.get()
+        if iface == "Peak":
+            self._chan_cb.config(values=PEAK_CHANNELS, state="readonly")
+            self._chan_var.set("PCAN_USBBUS1")
+        else:
+            self._chan_cb.config(values=["0", "1", "2"], state="readonly")
+            self._chan_var.set("0")
+
+    def _resolve_channel(self):
+        """Return (interface_str, channel) suitable for CANBusWrapper."""
+        iface = self._iface_var.get().lower()
+        if iface == "peak":
+            # CANBusWrapper maps channel index → PCAN_USBBUSx
+            chan_str = self._chan_var.get()          # e.g. "PCAN_USBBUS2"
+            idx = PEAK_CHANNELS.index(chan_str) if chan_str in PEAK_CHANNELS else 0
+            return "peak", idx
+        else:
+            try:
+                return iface, int(self._chan_var.get())
+            except ValueError:
+                return iface, 0
+
     # ── Monitor thread ────────────────────────────────────────────────────────
 
     def _start(self):
@@ -252,18 +285,21 @@ class PumpMonitorApp(tk.Tk):
         self._rx_count = 0
         self._rx_var.set("Frames: 0")
 
-        cfg = CAN_INTERFACE_MAP[self._iface_var.get()]
+        iface, channel = self._resolve_channel()
+        bitrate = int(self._baud_var.get())
         self._stop.clear()
         self._running = True
 
         self._start_btn.config(state="disabled")
         self._stop_btn.config(state="normal")
         self._dot.config(fg="#FCD34D")
-        self._status_var.set(f"Connecting {self._iface_var.get()} @ {self._baud_var.get()} bps...")
+        chan_display = self._chan_var.get()
+        self._status_var.set(
+            f"Connecting {self._iface_var.get()} / {chan_display} @ {bitrate} bps...")
 
         self._thread = threading.Thread(
             target=self._monitor_thread,
-            args=(cfg["interface"], cfg["channel"], int(self._baud_var.get())),
+            args=(iface, channel, bitrate),
             daemon=True)
         self._thread.start()
 
@@ -340,7 +376,8 @@ class PumpMonitorApp(tk.Tk):
                     self._dot.config(fg=GREEN)
                     self._status_var.set(
                         f"Monitoring {self._pump_var.get()} — "
-                        f"{self._iface_var.get()} @ {self._baud_var.get()} bps")
+                        f"{self._iface_var.get()} / {self._chan_var.get()} "
+                        f"@ {self._baud_var.get()} bps")
                     self._start_btn.config(state="disabled")
                     self._stop_btn.config(state="normal")
 

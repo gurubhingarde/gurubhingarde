@@ -54,14 +54,20 @@ class CANBusWrapper:
 
     def recv(self, timeout=0.05):
         if self.pcan:
-            status, rx_msg, _ = self.pcan.Read(self._pcan_channel)
-            if status == 0:
-                return {
-                    'arbitration_id': rx_msg.ID,
-                    'data': list(rx_msg.DATA[:rx_msg.LEN]),
-                    'is_extended_id': bool(rx_msg.MSGTYPE & 0x02)
-                }
-            return None
+            # PCANBasic.Read() is non-blocking; poll until timeout elapsed
+            deadline = time.time() + timeout
+            while True:
+                status, rx_msg, _ = self.pcan.Read(self._pcan_channel)
+                if status == 0:
+                    return {
+                        'arbitration_id': rx_msg.ID,
+                        'data': list(rx_msg.DATA[:rx_msg.LEN]),
+                        'is_extended_id': bool(rx_msg.MSGTYPE & 0x02)
+                    }
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    return None
+                time.sleep(min(0.001, remaining))
         else:
             msg = self.bus.recv(timeout=timeout)
             if msg:
