@@ -64,7 +64,7 @@ def footer(slide):
     rect(slide, 0, 7.18, 13.33, 0.32, fill=NAVY)
     txt(slide, "JSW Greentech Limited  —  Controls & Software Department  |  CONFIDENTIAL",
         0.3, 7.20, 10, 0.26, size=8.5, color=CBLUE)
-    txt(slide, "JSW FlashXpert  V2.0", 10.8, 7.20, 2.3, 0.26,
+    txt(slide, "JSW FlashXpert  V1.4", 10.8, 7.20, 2.3, 0.26,
         size=8.5, bold=True, color=WHITE, align=PP_ALIGN.RIGHT)
 
 def card(slide, x, y, w, h, title, bullets, accent=BLUE, title_size=13, bullet_size=11):
@@ -116,12 +116,12 @@ txt(s, "How JSW Controls & Software decoded a proprietary CAN protocol,\n"
        "adapted it to our hardware, and eliminated all OEM tool dependency.",
     0.8, 2.75, 11.5, 0.95, size=15, color=CBLUE)
 
-txt(s, "JSW Air Pump  ✦  JSW Oil Pump  ✦  PEAK PCAN Hardware  ✦  Zero OEM Dependency",
+txt(s, "JSW Air Pump  ✦  JSW Oil Pump  ✦  PEAK PCAN Hardware  ✦  Integrated into JSW FlashXpert V1.4",
     0.8, 3.9, 12.0, 0.42, size=12, color=RGBColor(0xFF,0xD7,0x00))
 
 txt(s, "Controls & Software Department\nR&D — JSW Greentech Limited  |  2025",
     0.8, 5.65, 9.0, 0.8, size=12, color=CBLUE)
-txt(s, "JSW\nFlashXpert\nV2.0", 11.5, 5.55, 1.6, 1.0,
+txt(s, "JSW\nFlashXpert\nV1.4", 11.5, 5.55, 1.6, 1.0,
     size=12, bold=True, color=WHITE, align=PP_ALIGN.RIGHT)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -457,20 +457,19 @@ footer(s)
 # SLIDE 8 — INTEGRATION INTO FLASHXPERT
 # ══════════════════════════════════════════════════════════════════════════════
 s = prs.slides.add_slide(BLANK)
-header(s, "Integration into JSW FlashXpert",
-       "From reverse-engineered protocol to production-ready flashing tool", accent=GREEN)
+header(s, "Integration into JSW FlashXpert V1.4 — Common Tool",
+       "Pump flashing added as a new tab in the same tool used for VCU, MCU, and all other ECUs", accent=GREEN)
 
-card(s, 0.35, 1.55, 6.1, 2.6, "Software Architecture", [
-    "flashing_logic.py",
-    "  ├─ CANBusWrapper       PEAK / Vector / Kvaser",
-    "  ├─ FlashingLogic       Existing UDS controllers",
-    "  ├─ PumpFlashingLogic   Oil Pump + Air Pump",
-    "  │    ├─ _pump_load_hex()         HEX parser",
-    "  │    ├─ _pump_build_oem_blocks() VER1 parser",
-    "  │    └─ _pump_build_blocks_sequential()",
-    "  └─ FOTAFlashingLogic   Phase 2 VCU FOTA",
+card(s, 0.35, 1.55, 6.1, 2.6, "Common Tool Architecture", [
+    "JSW FlashXpert V1.4  (jsw_gui.py + flashing_logic.py)",
     "",
-    "jsw_gui.py  — unified GUI, Phase 1 + Phase 2 tabs",
+    "  ├─ CANBusWrapper       PEAK / Vector / Kvaser",
+    "  ├─ FlashingLogic       VCU / MCU (UDS / ISO-TP)",
+    "  ├─ PumpFlashingLogic   Oil Pump + Air Pump  ← NEW",
+    "  │    ├─ _pump_load_hex()         HEX parser",
+    "  │    ├─ _pump_build_oem_blocks() VER1 stride fix",
+    "  │    └─ _pump_build_blocks_sequential()",
+    "  └─ FOTAFlashingLogic   Phase 2 VCU FOTA  ← NEW",
 ], accent=GREEN, bullet_size=10)
 
 card(s, 6.6, 1.55, 6.4, 2.6, "What Was Eliminated", [
@@ -533,12 +532,13 @@ txt(s, "Zero OEM Dependency.", 0.8, 1.6,  12.0, 1.1,
 
 txt(s, "We reverse-engineered a proprietary CAN flash protocol from captured traffic alone,\n"
        "implemented it in Python using PEAK hardware we already own, auto-detect all firmware\n"
-       "variants, handle live and cold-start ECUs — and shipped it as part of JSW FlashXpert.",
-    0.8, 2.85, 12.0, 1.0, size=13, color=CBLUE)
+       "variants, handle live and cold-start ECUs — integrated directly into JSW FlashXpert V1.4\n"
+       "as a new tab alongside VCU/MCU flashing.  One tool.  All ECUs.  No OEM tools.",
+    0.8, 2.75, 12.0, 1.2, size=13, color=CBLUE)
 
 txt(s, "Controls & Software Department  —  R&D, JSW Greentech Limited  |  2025",
     0.8, 5.3, 11.0, 0.42, size=11, color=CBLUE)
-txt(s, "JSW FlashXpert  V2.0",
+txt(s, "JSW FlashXpert  V1.4",
     0.8, 5.75, 5.0, 0.38, size=11, bold=True, color=WHITE)
 
 footer(s)
