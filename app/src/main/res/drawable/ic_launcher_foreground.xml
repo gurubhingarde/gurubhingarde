@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- glow -->
+    <path android:fillColor="#33FFC53D"
+        android:pathData="M54,22 m-20,0 a20,20 0,1 1,40 0 a20,20 0,1 1,-40 0" />
+    <!-- candle body -->
+    <path android:fillColor="#FF3CC6C9"
+        android:pathData="M46,46 L62,46 L62,82 L46,82 Z" />
+    <path android:fillColor="#FFFFF4E0"
+        android:pathData="M46,52 L62,46 L62,52 L46,58 Z M46,64 L62,58 L62,64 L46,70 Z M46,76 L62,70 L62,76 L46,82 Z" />
+    <!-- wick -->
+    <path android:fillColor="#FF3B2A2A"
+        android:pathData="M53,40 L55,40 L55,46 L53,46 Z" />
+    <!-- flame -->
+    <path android:fillColor="#FFFF7A2E"
+        android:pathData="M54,18 C60,26 64,31 64,36 C64,41.5 59.5,44 54,44 C48.5,44 44,41.5 44,36 C44,31 48,26 54,18 Z" />
+    <path android:fillColor="#FFFFF3A8"
+        android:pathData="M54,28 C57,32 59,35 59,38 C59,41 56.8,42.5 54,42.5 C51.2,42.5 49,41 49,38 C49,35 51,32 54,28 Z" />
+    <!-- frosting base -->
+    <path android:fillColor="#FFF7A8C4"
+        android:pathData="M32,82 L76,82 L76,88 C76,90 74,91 72,91 L36,91 C34,91 32,90 32,88 Z" />
+</vector>
