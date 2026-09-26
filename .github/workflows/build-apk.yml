@@ -20,12 +20,15 @@ jobs:
       - name: Build debug APK
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          ./gradlew --no-daemon assembleDebug bundleRelease
           cp app/build/outputs/apk/debug/app-debug.apk PuffTheCandles.apk
+          cp app/build/outputs/bundle/release/app-release.aab PuffTheCandles-unsigned.aab
       - uses: actions/upload-artifact@v4
         with:
           name: PuffTheCandles-apk
-          path: PuffTheCandles.apk
+          path: |
+            PuffTheCandles.apk
+            PuffTheCandles-unsigned.aab
       - name: Publish as a release (direct phone download)
         uses: softprops/action-gh-release@v2
         with:
@@ -33,5 +36,9 @@ jobs:
           name: Puff the Candles (build ${{ github.run_number }})
           target_commitish: ${{ github.sha }}
           make_latest: false
-          body: Open this page on your Android phone and tap PuffTheCandles.apk to install.
-          files: PuffTheCandles.apk
+          body: |
+            Open this page on your Android phone and tap PuffTheCandles.apk to install.
+            PuffTheCandles-unsigned.aab is the Play Store bundle before signing.
+          files: |
+            PuffTheCandles.apk
+            PuffTheCandles-unsigned.aab
