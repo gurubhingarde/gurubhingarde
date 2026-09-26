@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,7 +21,17 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk PuffTheCandles.apk
       - uses: actions/upload-artifact@v4
         with:
           name: PuffTheCandles-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: PuffTheCandles.apk
+      - name: Publish as a release (direct phone download)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: puff-the-candles-v${{ github.run_number }}
+          name: Puff the Candles (build ${{ github.run_number }})
+          target_commitish: ${{ github.sha }}
+          make_latest: false
+          body: Open this page on your Android phone and tap PuffTheCandles.apk to install.
+          files: PuffTheCandles.apk
