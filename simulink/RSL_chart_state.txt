@@ -1,0 +1,49 @@
+RSL
+entry:
+% Road speed limiter: constant speed hold at full throttle (same logic as tested C)
+vRef  = single(v);
+Iacc  = single(DrvTrq);
+Tprev = single(DrvTrq);
+RslState = 0;
+TrqUBound = double(DrvTrq);
+Rsl_PCont = 0; Rsl_ICont = double(DrvTrq);
+Rsl_Pid_TrqDlta = 0; TrqSoftDelta = double(v);
+during:
+vs = single(v); Ls = single(L); D = single(DrvTrq);
+% lowest torque = max regen allowed
+MinT = -min(min(single(BrakeAllow), single(SlideAllow)), abs(single(maxRslRegenTrq)));
+MinT = min(MinT, D);
+Pc = single(0); Vdif = single(0);
+if ~(Ls > RSL_LimitMin) || (vs < Ls - RSL_EngBand)
+    % OFF: far below limit or limit invalid -> driver torque passes
+    RslState = 0;
+    vRef = vs; Iacc = D; T = D;
+else
+    % speed reference ramps to the limit
+    stp  = RSL_RefRate * single(0.05);
+    vRef = vRef + min(max(Ls - vRef, -stp), stp);
+    Vdif = vRef - vs;
+    Pc   = RSL_Kp * Vdif;
+    u    = Pc + Iacc + RSL_Ki * single(0.05) * Vdif;
+    if u >= D
+        % ARMED: driver asks less than limiter allows -> pass, track (bumpless)
+        RslState = 1;
+        T = D;
+        vRef = min(vs, Ls);
+        Vdif = vRef - vs;
+        Pc   = RSL_Kp * Vdif;
+        Iacc = D - Pc;
+    else
+        % LIMITING: PI + slew limit + bounds + back-calculation anti-windup
+        RslState = 2;
+        T = min(max(u, Tprev - RSL_TrqRate), Tprev + RSL_TrqRate);
+        T = min(max(T, MinT), D);
+        Iacc = Iacc + RSL_Ki * single(0.05) * Vdif + (T - u);
+    end
+end
+Tprev = T;
+TrqUBound       = double(T);
+Rsl_PCont       = double(Pc);
+Rsl_ICont       = double(Iacc);
+Rsl_Pid_TrqDlta = double(Vdif);
+TrqSoftDelta    = double(vRef);
