@@ -979,8 +979,10 @@ class VirtualBMS:
             self._rx_CSD(data)           # CSD (PGN 0x1D00)
         elif pf == 0x1F and sa == self.sa_chg:
             self._rx_CEM(data)           # CEM (PGN 0x1F00) -- charger error message
-        # ── Last resort for unknown charger SA ──
-        elif sa not in (self.sa_bms,):
+        # ── Last resort: only for frames whose SA is our own charger ──
+        # Do NOT fall through for other-gun charger SAs — that causes the other
+        # charger's CRM/CCS/CST to stop our BHM and corrupt our state machine.
+        elif sa == self.sa_chg:
             pf8 = (cid >> 16) & 0xFF
             ps  = (cid >> 8) & 0xFF
             self._dispatch_charger(pf8, ps, data, cid)
