@@ -721,19 +721,34 @@ class ChargerMessages:
 # Virtual Bus (internal, no hardware needed)
 # ============================================================
 class VirtualBus:
-    """Zero-hardware internal CAN bus with subscriber pattern."""
+    """Zero-hardware internal CAN bus with subscriber pattern.
+
+    send() is non-reentrant-safe by design: frames are queued and dispatched
+    on a dedicated thread so that a subscriber responding to a frame (e.g. a
+    charger sending CTS in response to an RTS) does not recursively re-enter
+    other subscribers mid-delivery. Without this, dual-gun TP handshakes corrupt
+    each other's J1939_TP state machines through deep synchronous call chains.
+    """
     def __init__(self):
         self._subs: list = []
         self._log_q = queue.Queue()
+        self._tx_q: queue.Queue = queue.Queue()
+        self._dispatch_thread = threading.Thread(target=self._dispatch_loop, daemon=True)
+        self._dispatch_thread.start()
+
+    def _dispatch_loop(self):
+        while True:
+            can_id, data = self._tx_q.get()
+            for cb in self._subs:
+                try:
+                    cb(can_id, bytes(data))
+                except Exception:
+                    pass
 
     def send(self, can_id: int, data: bytes, channel: str = "vbus"):
         msg = {'id': can_id, 'data': data, 'ts': time.time(), 'ch': channel}
         self._log_q.put(msg)
-        for cb in self._subs:
-            try:
-                cb(can_id, bytes(data))
-            except Exception as e:
-                pass
+        self._tx_q.put((can_id, data))
 
     def log_frame(self, can_id: int, data: bytes, channel: str = "log-only", ts: float | None = None):
         """Record a frame for GUI/text monitoring without publishing it to subscribers."""
