@@ -18,6 +18,7 @@
 #include <math.h>
 #include <string.h>
 #include "Torque_Control_private.h"
+#include "RoadSpeedLimiter.h"
 
 /* Named constants for Chart: '<S4>/Chart' */
 #define Torque_Contr_IN_NO_ACTIVE_CHILD ((uint8_T)0U)
@@ -236,6 +237,9 @@ ExtU_Torque_Control_T Torque_Control_U;
 
 /* External outputs (root outports fed by signals with default storage) */
 ExtY_Torque_Control_T Torque_Control_Y;
+
+/* Road speed limiter state (replaces Chart '<S4>/Chart') */
+static RSL_State_T Torque_Control_RSL;
 
 /* Real-time model */
 static RT_MODEL_Torque_Control_T Torque_Control_M_;
@@ -1839,7 +1843,6 @@ void Torque_Control_step0(void)        /* Sample time: [0.05s, 0.0s] */
 /* Model step function for TID1 */
 void Torque_Control_step1(void)        /* Explicit Task: GEAR_D_TorqueControl */
 {
-  real_T TrqSoftTrgtDiff;
   real_T rtb_Product3;
   int32_T tmp_0;
   real32_T rtb_Abs5;
@@ -2130,124 +2133,37 @@ void Torque_Control_step1(void)        /* Explicit Task: GEAR_D_TorqueControl */
 
   /* End of Switch: '<S4>/Switch8' */
 
-  /* Chart: '<S4>/Chart' incorporates:
-   *  DataTypeConversion: '<S4>/Data Type Conversion'
-   *  DataTypeConversion: '<S4>/Data Type Conversion3'
-   *  DataTypeConversion: '<S4>/Data Type Conversion4'
-   *  Inport: '<Root>/CAL_sDVeilSpdLimit'
-   *  Inport: '<Root>/Rsl_DltaSoftDiff'
-   *  Inport: '<Root>/Rsl_ReleaseDelta'
-   *  Inport: '<Root>/Rsl_Trq_diff_SMax'
-   *  Inport: '<Root>/maxRslRegenTrq'
-   *  Outport: '<Root>/Rsl_Pid_TrqDlta'
-   *  Outport: '<Root>/TrqSoftDelta'
+  /* Road speed limiter (replaces Chart '<S4>/Chart').
+   *  Inport:  '<Root>/CAL_sDVeilSpdLimit'  speed limit [km/h]
+   *  Inport:  '<Root>/maxRslRegenTrq'      max regen while limiting [Nm]
+   *  Speed:   vehicle speed filter output (TmpRTBAtGEAR_D_TorqueControlI_p)
+   *  Demand:  Check_D_DriveTorque
+   *  Calibration: RSL_Kp, RSL_Ki, RSL_EngBand, RSL_RefRate, RSL_TrqRate,
+   *               RSL_LimitMin (RoadSpeedLimiter.c)
+   *  Inports Rsl_Kp, Rsl_ki, Rsl_ICont_Max, Rsl_DltaSoftDiff,
+   *  Rsl_ReleaseDelta, Rsl_Trq_diff_SMax, Rsl_Trq_diff_PIMax are no longer used.
+   *
+   *  Outports reused for logging:
+   *    RslState        0 = off, 1 = armed, 2 = limiting
+   *    Rsl_PCont       proportional term        [Nm]
+   *    Rsl_ICont       integral term            [Nm]
+   *    Rsl_Pid_TrqDlta speed error vRef - v     [km/h]
+   *    TrqSoftDelta    speed reference vRef     [km/h]
    */
-  if (Torque_Control_DW.is_active_c12_Torque_Control == 0) {
-    Torque_Control_DW.is_active_c12_Torque_Control = 1U;
-    Torque_Control_DW.is_c12_Torque_Control = Torque_Control_IN_Idle;
-  } else {
-    switch (Torque_Control_DW.is_c12_Torque_Control) {
-     case Torque_Control_IN_Idle:
-      if ((real_T)Torque_Control_U.CAL_sDVeilSpdLimit -
-          Torque_Control_B.TmpRTBAtGEAR_D_TorqueControlI_p <=
-          Torque_Control_U.Rsl_DltaSoftDiff) {
-        Torque_Control_DW.is_c12_Torque_Control = Torque_Control_IN_SoftLanding;
-        Torque_Control_DW.TqSoftMax = 1100.0;
-        Torque_Control_B.TrqUBound = 1100.0;
-      } else {
-        Torque_Control_B.TrqUBound = Torque_Control_Y.Check_D_DriveTorque;
+  Torque_Control_B.TrqUBound = RSL_Step(&Torque_Control_RSL,
+    Torque_Control_B.TmpRTBAtGEAR_D_TorqueControlI_p,
+    Torque_Control_U.CAL_sDVeilSpdLimit,
+    (real32_T)Torque_Control_Y.Check_D_DriveTorque,
+    -fminf(fminf(Torque_Control_B.TmpRTBAtGEAR_D_TorqueControlI_c,
+                 Torque_Control_B.TmpRTBAtGEAR_D_TorqueControlI_d),
+           fabsf((real32_T)Torque_Control_U.maxRslRegenTrq)));
+  Torque_Control_Y.RslState = Torque_Control_RSL.state;
+  Torque_Control_Y.Rsl_PCont = Torque_Control_RSL.P;
+  Torque_Control_Y.Rsl_ICont = Torque_Control_RSL.I;
+  Torque_Control_Y.Rsl_Pid_TrqDlta = Torque_Control_RSL.e;
+  Torque_Control_Y.TrqSoftDelta = Torque_Control_RSL.vRef;
 
-        /* Outport: '<Root>/RslState' incorporates:
-         *  DataTypeConversion: '<S4>/Data Type Conversion4'
-         */
-        Torque_Control_Y.RslState = 0.0;
-      }
-      break;
-
-     case Torque_Control_IN_PIDGoverning:
-      rtb_Product3 = (real_T)Torque_Control_U.CAL_sDVeilSpdLimit -
-        Torque_Control_B.TmpRTBAtGEAR_D_TorqueControlI_p;
-      if (rtb_Product3 >= Torque_Control_U.Rsl_ReleaseDelta) {
-        Torque_Control_DW.is_c12_Torque_Control = Torque_Control_IN_Idle;
-      } else {
-        /* Outport: '<Root>/RslState' */
-        Torque_Control_Y.RslState = 2.0;
-
-        /* Outport: '<Root>/Rsl_PCont' incorporates:
-         *  Inport: '<Root>/Rsl_Kp'
-         */
-        Torque_Control_Y.Rsl_PCont = Torque_Control_U.Rsl_Kp * rtb_Product3;
-        if (rtb_Product3 < 2.0) {
-          /* Outport: '<Root>/Rsl_ICont' incorporates:
-           *  Inport: '<Root>/Rsl_ki'
-           */
-          Torque_Control_Y.Rsl_ICont += Torque_Control_U.Rsl_ki * rtb_Product3;
-        }
-
-        /* Outport: '<Root>/Rsl_ICont' incorporates:
-         *  Inport: '<Root>/Rsl_ICont_Max'
-         */
-        Torque_Control_Y.Rsl_ICont = fmin(fmax(Torque_Control_Y.Rsl_ICont, 0.0),
-          Torque_Control_U.Rsl_ICont_Max);
-
-        /* Outport: '<Root>/Rsl_Pid_TrqDlta' incorporates:
-         *  Inport: '<Root>/Rsl_Trq_diff_PIMax'
-         *  Outport: '<Root>/Rsl_ICont'
-         *  Outport: '<Root>/Rsl_PCont'
-         */
-        Torque_Control_Y.Rsl_Pid_TrqDlta = fmax(((Torque_Control_B.TrqUBound +
-          Torque_Control_Y.Rsl_PCont) + Torque_Control_Y.Rsl_ICont) -
-          Torque_Control_B.TrqUBound, -Torque_Control_U.Rsl_Trq_diff_PIMax);
-        Torque_Control_B.TrqUBound += Torque_Control_Y.Rsl_Pid_TrqDlta;
-        Torque_Control_B.TrqUBound = fmin(fmax(Torque_Control_B.TrqUBound,
-          -Torque_Control_U.maxRslRegenTrq), 900.0);
-      }
-      break;
-
-     default:
-      /* case IN_SoftLanding: */
-      if (Torque_Control_U.CAL_sDVeilSpdLimit <=
-          Torque_Control_B.TmpRTBAtGEAR_D_TorqueControlI_p) {
-        Torque_Control_DW.is_c12_Torque_Control = Torque_Control_IN_PIDGoverning;
-      } else if ((real_T)Torque_Control_U.CAL_sDVeilSpdLimit -
-                 Torque_Control_B.TmpRTBAtGEAR_D_TorqueControlI_p >=
-                 Torque_Control_U.Rsl_ReleaseDelta) {
-        Torque_Control_DW.is_c12_Torque_Control = Torque_Control_IN_Idle;
-      } else {
-        /* Outport: '<Root>/RslState' */
-        Torque_Control_Y.RslState = 1.0;
-        rtb_Product3 = (Torque_Control_U.CAL_sDVeilSpdLimit + 2.0) -
-          Torque_Control_B.TmpRTBAtGEAR_D_TorqueControlI_p;
-        rtb_Product3 = rtb_Product3 * rtb_Product3 /
-          (Torque_Control_U.Rsl_DltaSoftDiff * Torque_Control_U.Rsl_DltaSoftDiff)
-          * Torque_Control_DW.TqSoftMax;
-        TrqSoftTrgtDiff = rtb_Product3 - Torque_Control_B.TrqUBound;
-        if (TrqSoftTrgtDiff <= -Torque_Control_U.Rsl_Trq_diff_SMax) {
-          /* Outport: '<Root>/TrqSoftDelta' */
-          Torque_Control_Y.TrqSoftDelta = -Torque_Control_U.Rsl_Trq_diff_SMax;
-        } else if (TrqSoftTrgtDiff >= Torque_Control_U.Rsl_Trq_diff_SMax) {
-          /* Outport: '<Root>/TrqSoftDelta' */
-          Torque_Control_Y.TrqSoftDelta = Torque_Control_U.Rsl_Trq_diff_SMax;
-        }
-
-        Torque_Control_B.TrqUBound += Torque_Control_Y.TrqSoftDelta;
-        if ((Torque_Control_Y.TrqSoftDelta < 0.0) &&
-            (Torque_Control_Y.TrqSoftDelta < rtb_Product3)) {
-          Torque_Control_B.TrqUBound = fmax(Torque_Control_B.TrqUBound,
-            rtb_Product3);
-        }
-
-        if ((Torque_Control_Y.TrqSoftDelta > 0.0) &&
-            (Torque_Control_Y.TrqSoftDelta > rtb_Product3)) {
-          Torque_Control_B.TrqUBound = fmin(Torque_Control_B.TrqUBound,
-            rtb_Product3);
-        }
-      }
-      break;
-    }
-  }
-
-  /* End of Chart: '<S4>/Chart' */
+  /* End of road speed limiter */
 
   /* MinMax: '<S4>/Max1' incorporates:
    *  Gain: '<S4>/Gain2'
@@ -2997,7 +2913,8 @@ void Torque_Control_initialize(void)
   /* InitializeConditions for DiscreteIntegrator: '<S69>/Integrator' */
   Torque_Control_DW.Integrator_PrevResetState_n = 2;
 
-  /* SystemInitialize for Chart: '<S4>/Chart' */
+  /* SystemInitialize for road speed limiter (replaces Chart '<S4>/Chart') */
+  RSL_Init(&Torque_Control_RSL);
   Torque_Control_B.TrqUBound = 0.0;
   Torque_Control_DW.TqSoftMax = 0.0;
 
