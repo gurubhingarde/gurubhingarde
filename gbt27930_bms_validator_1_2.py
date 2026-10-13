@@ -807,6 +807,7 @@ class VirtualBMS:
         self._bcp_thread = None
         self._bsd_sent = False   # guards against double-sending BSD
         self._bsm_started = False   # Table D.1: BSM must not send before first CCS
+        self._bcp_started = False   # guards against starting BCP twice per session
         self._pending_timeouts: dict = {}   # key -> threading.Timer, for BEM watchdogs
 
     TP_PGNS = {
@@ -1424,7 +1425,7 @@ class VirtualBMS:
             bcl = self.msgs.BCL(
                 v_demand=min(self.params.get('max_total_voltage', 700.0),
                              self.sim_pack_v + 5),
-                i_demand=self.params.get('charge_current_demand', -100.0)
+                i_demand=self.params.get('charge_current_demand', 100.0)
             )
             self._send(self.cid.BCL, bcl)
             
@@ -1764,7 +1765,7 @@ class ChargerSimulator:
         """Send CCS at 250ms while charging."""
         self._log("=== CHARGING PHASE ===")
         v = self.params.get('pack_voltage', 560.0)
-        i = self.params.get('charge_current_demand', -100.0)
+        i = self.params.get('charge_current_demand', 100.0)
         cycles = 12 if self.faults['early_stop'] else 200
         ccs_period = 0.8 if self.faults['slow_ccs'] else 0.050
         if self.faults['slow_ccs']:
@@ -1789,7 +1790,7 @@ class ChargerSimulator:
             # = 10), which is why the simulated charger's own CCS output
             # went positive almost immediately regardless of the demand
             # sign requested via BCL.
-            i = min(-10.0, i + 0.2)
+            i = max(10.0, i - 0.2)   # taper current down toward 10A floor
             time.sleep(ccs_period)
 
     def _stop_phase(self):
