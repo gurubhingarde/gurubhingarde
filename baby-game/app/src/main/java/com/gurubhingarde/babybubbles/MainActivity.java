@@ -61,7 +61,12 @@ public class MainActivity extends Activity {
     public class Bridge {
         @JavascriptInterface
         public void exit() {
-            runOnUiThread(MainActivity.this::finish);
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    finish();
+                }
+            });
         }
     }
 
