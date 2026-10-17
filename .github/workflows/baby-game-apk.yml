@@ -1,0 +1,28 @@
+name: Build Baby Bubble Party APK
+
+on:
+  push:
+    paths:
+      - 'baby-game/**'
+      - '.github/workflows/baby-game-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: baby-game
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Build debug APK
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BabyBubbleParty-apk
+          path: baby-game/app/build/outputs/apk/debug/*.apk

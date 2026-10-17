@@ -1,0 +1,8 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+# Personal photos never go into git
+app/src/main/assets/faces/*
+!app/src/main/assets/faces/README.md

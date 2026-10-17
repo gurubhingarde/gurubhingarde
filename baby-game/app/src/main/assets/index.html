@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#7fd3ff">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Baby Bubble Party</title>
+<style>
+  :root { --sky: #7fd3ff; --ink: #2b2d42; --accent: #ff5fa2; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: var(--sky);
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none; overscroll-behavior: none;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  canvas#c { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  #parent {
+    position: fixed; inset: 0; z-index: 5; display: none;
+    align-items: center; justify-content: center; background: rgba(20, 20, 45, .86);
+  }
+  #parent.open { display: flex; }
+  .card {
+    background: #fff; color: var(--ink); border-radius: 18px; padding: 16px;
+    width: calc(100% - 32px); max-width: 440px; max-height: calc(100% - 32px);
+    overflow: auto; box-sizing: border-box; touch-action: pan-y;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 20px; }
+  .card p { margin: 0 0 12px; font-size: 14px; line-height: 1.4; color: #555; }
+  .slots { display: flex; gap: 10px; justify-content: space-between; margin-bottom: 12px; }
+  .slot { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; }
+  .slot canvas { width: 72px; height: 90px; background: #eef7ff; border-radius: 50%; }
+  button {
+    font: inherit; font-size: 15px; border: 0; border-radius: 12px; padding: 10px 14px;
+    background: #eef0ff; color: var(--ink); min-height: 44px; cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #fff; font-weight: 600; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .row > * { flex: 1; }
+  #cropper { border-top: 1px solid #eee; padding-top: 12px; margin-bottom: 12px; text-align: center; }
+  #cropCv { width: 240px; height: 300px; border-radius: 12px; background: #222; touch-action: none; }
+  #zoom { width: 240px; }
+  label.toggle { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 15px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="parent" role="dialog" aria-label="Parent settings">
+  <div class="card">
+    <h2>Parents' corner</h2>
+    <p>Pick three photos of your little one. Photos stay on this phone only.</p>
+    <div class="slots">
+      <div class="slot" data-k="calm"><canvas width="144" height="180"></canvas>Normal<button>Choose</button></div>
+      <div class="slot" data-k="oh"><canvas width="144" height="180"></canvas>Surprised<button>Choose</button></div>
+      <div class="slot" data-k="yell"><canvas width="144" height="180"></canvas>Shouting<button>Choose</button></div>
+    </div>
+    <div id="cropper" hidden>
+      <canvas id="cropCv" width="480" height="600"></canvas><br>
+      <input type="range" id="zoom" min="0.3" max="5" step="0.01" value="1" aria-label="Zoom">
+      <p>Drag the photo so the face fills the oval.</p>
+      <div class="row"><button id="cropCancel">Cancel</button><button id="cropSave" class="primary">Use this</button></div>
+    </div>
+    <label class="toggle"><input type="checkbox" id="soundOn"> Sounds</label>
+    <div class="row">
+      <button id="resetFaces">Reset photos</button>
+      <button id="exitApp" hidden>Exit app</button>
+    </div>
+    <div class="row"><button id="closeParent" class="primary">Back to the game ▶</button></div>
+    <input type="file" id="file" accept="image/*" hidden>
+  </div>
+</div>
+
+<!--BUNDLED_FACES-->
+<script>
+(() => {
+'use strict';
+
+// ---------- canvas ----------
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, U = 0, groundY = 0;
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  W = innerWidth; H = innerHeight; U = Math.min(W, H);
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  groundY = H * 0.88;
+}
+addEventListener('resize', resize);
+resize();
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[(Math.random() * a.length) | 0];
+const TAU = Math.PI * 2;
+
+// ---------- sound (all synthesized, no audio files) ----------
+let AC = null, soundOn = true;
+try { soundOn = localStorage.getItem('babySound') !== '0'; } catch (e) {}
+function ac() {
+  if (!AC) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    AC = new C();
+  }
+  if (AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone({ type = 'sine', f0, f1, dur, vol = 0.3, delay = 0, vib = 0 }) {
+  const a = ac(); if (!a || !soundOn) return;
+  const t = a.currentTime + delay;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, t);
+  if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  if (vib) {
+    const l = a.createOscillator(), lg = a.createGain();
+    l.frequency.value = vib; lg.gain.value = f0 * 0.08;
+    l.connect(lg).connect(o.frequency); l.start(t); l.stop(t + dur);
+  }
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(a.destination);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+let noiseBuf = null;
+function noise(dur, freq, vol, delay = 0) {
+  const a = ac(); if (!a || !soundOn) return;
+  if (!noiseBuf) {
+    noiseBuf = a.createBuffer(1, a.sampleRate * 0.3, a.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const t = a.currentTime + delay;
+  const s = a.createBufferSource(); s.buffer = noiseBuf;
+  const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = 1.2;
+  const g = a.createGain();
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(bp).connect(g).connect(a.destination);
+  s.start(t); s.stop(t + dur);
+}
+const SFX = {
+  pop(size = 1) { noise(0.09, rand(1200, 2500), 0.5); tone({ f0: 900 / size, f1: 140, dur: 0.13, vol: 0.35 }); },
+  boing() { tone({ type: 'triangle', f0: 180, f1: 560, dur: 0.38, vol: 0.32, vib: 18 }); },
+  whee() { tone({ f0: 420, f1: 1300, dur: 0.33, vol: 0.25 }); tone({ f0: 1300, f1: 480, dur: 0.38, vol: 0.25, delay: 0.32 }); },
+  giggle() {
+    [1000, 860, 960, 820, 920, 760].forEach((f, i) =>
+      tone({ type: 'triangle', f0: f, f1: f * 0.78, dur: 0.09, vol: 0.22, delay: i * 0.11, vib: 30 }));
+  },
+  ding() { const f = pick([1047, 1175, 1319, 1568, 1760]); tone({ f0: f, dur: 0.25, vol: 0.16 }); tone({ f0: f * 2, dur: 0.15, vol: 0.05 }); },
+  fanfare() {
+    [523, 659, 784, 1047, 784, 1047].forEach((f, i) =>
+      tone({ type: 'square', f0: f, dur: i === 5 ? 0.5 : 0.14, vol: 0.09, delay: i * 0.13 }));
+  },
+  squeak() { tone({ f0: 1400, f1: 2300, dur: 0.08, vol: 0.2 }); tone({ f0: 2300, f1: 1100, dur: 0.12, vol: 0.2, delay: 0.08 }); },
+};
+function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+document.addEventListener('visibilitychange', () => {
+  if (!AC) return;
+  if (document.hidden) AC.suspend(); else AC.resume();
+});
+
+// ---------- faces ----------
+// Priority: photos picked in the parents' corner > photos bundled into this file > assets/faces/*.png > cartoon.
+const FACE_KEYS = ['calm', 'oh', 'yell'];
+const faces = {};
+function cartoonFace(kind) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 320;
+  const g = c.getContext('2d');
+  g.fillStyle = '#d9a07a'; g.beginPath(); g.ellipse(128, 165, 118, 150, 0, 0, TAU); g.fill();
+  g.fillStyle = '#2a1a12'; g.beginPath(); g.ellipse(128, 60, 120, 60, 0, Math.PI, TAU); g.fill();
+  g.fillStyle = '#c2185b'; g.beginPath(); g.arc(128, 105, 6, 0, TAU); g.fill();
+  g.fillStyle = '#fff';
+  for (const x of [84, 172]) { g.beginPath(); g.ellipse(x, 150, 22, kind === 'calm' ? 16 : 22, 0, 0, TAU); g.fill(); }
+  g.fillStyle = '#1b1b1b';
+  for (const x of [84, 172]) { g.beginPath(); g.arc(x, 152, 11, 0, TAU); g.fill(); }
+  g.fillStyle = '#7a2a2a';
+  g.beginPath();
+  if (kind === 'yell') g.ellipse(128, 235, 46, 50, 0, 0, TAU);
+  else if (kind === 'oh') g.ellipse(128, 235, 22, 26, 0, 0, TAU);
+  else { g.lineWidth = 8; g.strokeStyle = '#7a2a2a'; g.arc(128, 215, 34, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke(); }
+  g.fill();
+  return c;
+}
+function loadImg(src) {
+  return new Promise(res => {
+    const i = new Image();
+    i.onload = () => res(i); i.onerror = () => res(null);
+    i.src = src;
+  });
+}
+function savedFaces() {
+  try { return JSON.parse(localStorage.getItem('babyFaces') || '{}'); } catch (e) { return {}; }
+}
+async function loadFaces() {
+  const saved = savedFaces();
+  const bundled = window.BUNDLED_FACES || {};
+  for (const k of FACE_KEYS) {
+    let img = null;
+    for (const src of [saved[k], bundled[k], 'faces/face_' + k + '.png']) {
+      if (!src) continue;
+      img = await loadImg(src);
+      if (img) break;
+    }
+    faces[k] = img || cartoonFace(k);
+  }
+  refreshSlots();
+}
+FACE_KEYS.forEach(k => { faces[k] = cartoonFace(k); });
+loadFaces();
+
+const aspect = img => (img.naturalWidth || img.width) / (img.naturalHeight || img.height);
+// draw a face of height h centred at (x, y), with squash/stretch sx, sy
+function drawFace(key, x, y, h, rot = 0, sx = 1, sy = 1) {
+  const img = faces[key];
+  const w = h * aspect(img);
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sx, sy);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
+// ---------- world state ----------
+const EMOJIS = ['🐶', '🐱', '🦆', '🐘', '🐰', '🐸', '🍌', '🍎', '🦋', '⭐', '🐠', '🐵', '🌸', '🍦'];
+const COLORS = ['#ff5fa2', '#ffd23f', '#3bceac', '#4d96ff', '#ff8c42', '#b388ff', '#ff4d4d'];
+const bubbles = [], parts = [], flyers = [], rings = [];
+const clouds = Array.from({ length: 4 }, () => ({ x: rand(0, 1), y: rand(0.08, 0.4), s: rand(0.7, 1.3), v: rand(0.01, 0.03) }));
+const flowers = Array.from({ length: 9 }, (_, i) => ({ x: (i + rand(0.2, 0.8)) / 9, c: pick(COLORS), ph: rand(0, TAU) }));
+const kid = { x: 0, jy: 0, vy: 0, air: false, targetX: null, face: 'calm', faceT: 0, spin: 0, spinT: 0, squash: 0, t: 0 };
+const sun = { spinT: 0, ang: 0 };
+const peek = { state: 'idle', t: 0, wait: 9, side: 'left', p: 0, spinT: 0 };
+let pops = 0, partyT = 0, spawnT = 0, time = 0, lastTap = 0;
+let gearHold = null;
+
+function kidH() { return Math.min(U * 0.45, H * 0.42); }
+function sunPos() { const r = U * 0.1; return { x: W - r * 1.7, y: r * 1.7, r }; }
+
+function burst(x, y, n, opts = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = rand(0, TAU), sp = U * rand(0.3, 1.1) * (opts.power || 1);
+    parts.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - U * 0.3,
+      c: opts.color || pick(COLORS), s: U * rand(0.012, 0.028), rot: rand(0, TAU), vr: rand(-10, 10),
+      shape: opts.shape || pick(['rect', 'star', 'heart', 'circle']), life: rand(0.8, 1.5), t: 0,
+    });
+  }
+}
+
+function spawnBubble(big) {
+  const r = big ? U * rand(0.16, 0.2) : U * rand(0.085, 0.13);
+  const c = Math.random() < 0.5 ? { face: pick(FACE_KEYS) } : { emoji: pick(EMOJIS) };
+  bubbles.push({ x: rand(r, Math.max(r, W - r)), y: H + r, r, vy: -U * rand(0.1, 0.17), ph: rand(0, TAU), wob: rand(0.6, 1.4), hue: rand(0, 360), c, t: 0 });
+}
+
+function popBubble(i) {
+  const b = bubbles[i];
+  bubbles.splice(i, 1);
+  pops++;
+  SFX.pop(b.r / (U * 0.1)); buzz(25);
+  burst(b.x, b.y, 18);
+  rings.push({ x: b.x, y: b.y, r: b.r, t: 0 });
+  flyers.push({ ...b.c, x: b.x, y: b.y, vx: rand(-0.3, 0.3) * U, vy: -U * 0.5, rot: 0, vr: rand(-6, 6), s: b.r * 1.7, t: 0, life: 1.3 });
+  if (b.c.face) { kidSay('yell', 1.0); setTimeout(SFX.giggle, 150); }
+  else setTimeout(SFX.squeak, 120);
+  if (pops % 10 === 0) party();
+}
+
+function kidSay(face, secs) { kid.face = face; kid.faceT = secs; }
+function kidJump() {
+  if (!kid.air) { kid.vy = -U * 1.7; kid.air = true; }
+  kidSay('yell', 1.3);
+  if (Math.random() < 0.5) { kid.spin = Math.random() < 0.5 ? 1 : -1; kid.spinT = 0; }
+  SFX.whee(); buzz(30);
+}
+
+function party() {
+  partyT = 4;
+  SFX.fanfare();
+  for (let i = 0; i < 60; i++) {
+    parts.push({ x: rand(0, W), y: rand(-H * 0.3, 0), vx: rand(-40, 40), vy: rand(50, 200), c: pick(COLORS), s: U * rand(0.014, 0.03),
+      rot: rand(0, TAU), vr: rand(-8, 8), shape: pick(['rect', 'star', 'heart']), life: rand(2.5, 4), t: 0, slow: true });
+  }
+  for (let i = 0; i < 4; i++) setTimeout(() => spawnBubble(true), i * 350);
+  setTimeout(kidJump, 300);
+}
+
+// ---------- input ----------
+function tap(x, y) {
+  lastTap = time;
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    if (Math.hypot(x - b.x, y - b.y) < b.r * 1.3) { popBubble(i); return; }
+  }
+  const s = sunPos();
+  if (Math.hypot(x - s.x, y - s.y) < s.r * 1.4) {
+    sun.spinT = 1.2; SFX.giggle(); burst(s.x, s.y, 20, { color: '#ffd23f', shape: 'star' }); buzz(20);
+    return;
+  }
+  if (peek.state !== 'idle' && peekHit(x, y)) {
+    peek.spinT = 1; peek.state = 'hold'; peek.t = Math.min(peek.t, 0.3);
+    SFX.giggle(); SFX.boing(); burst(x, y, 24); buzz(30);
+    return;
+  }
+  const h = kidH(), ky = groundY + kid.jy;
+  if (Math.abs(x - kid.x) < h * 0.33 && y > ky - h && y < ky) { kidJump(); burst(x, y, 10, { shape: 'heart' }); return; }
+  // empty space: sparkles, and the kid toddles over
+  burst(x, y, 8, { shape: 'star', power: 0.6 });
+  SFX.ding();
+  kid.targetX = Math.max(h * 0.3, Math.min(W - h * 0.3, x));
+}
+
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  ac();
+  if (e.clientX < 64 && e.clientY < 64) { gearHold = { id: e.pointerId, t: 0 }; return; }
+  tap(e.clientX, e.clientY);
+});
+const endHold = e => { if (gearHold && gearHold.id === e.pointerId) gearHold = null; };
+cv.addEventListener('pointerup', endHold);
+cv.addEventListener('pointercancel', endHold);
+cv.addEventListener('pointerleave', endHold);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// ---------- peekaboo ----------
+function peekGeom() {
+  const h = U * 0.38, p = peek.p;
+  if (peek.side === 'left') return { x: -h * 0.45 + p * h * 0.75, y: H * 0.45, h, rot: 0.5 };
+  if (peek.side === 'right') return { x: W + h * 0.45 - p * h * 0.75, y: H * 0.45, h, rot: -0.5 };
+  return { x: W * 0.3, y: H + h * 0.5 - p * h * 0.8, h, rot: 0 };
+}
+function peekHit(x, y) { const g = peekGeom(); return Math.hypot(x - g.x, y - g.y) < g.h * 0.55; }
+function updatePeek(dt) {
+  peek.t += dt;
+  if (peek.spinT > 0) peek.spinT -= dt;
+  if (peek.state === 'idle') {
+    if (peek.t > peek.wait) { peek.state = 'in'; peek.t = 0; peek.side = pick(['left', 'right', 'bottom']); }
+  } else if (peek.state === 'in') {
+    peek.p = Math.min(1, peek.t / 0.6);
+    if (peek.p >= 1) { peek.state = 'hold'; peek.t = 0; SFX.boing(); }
+  } else if (peek.state === 'hold') {
+    if (peek.t > 2.2) { peek.state = 'out'; peek.t = 0; }
+  } else if (peek.state === 'out') {
+    peek.p = Math.max(0, 1 - peek.t / 0.5);
+    if (peek.p <= 0) { peek.state = 'idle'; peek.t = 0; peek.wait = rand(7, 14); }
+  }
+}
+
+// ---------- update ----------
+function update(dt) {
+  time += dt;
+  if (!kid.x) kid.x = W * 0.5;
+
+  spawnT -= dt;
+  if (spawnT <= 0 && bubbles.length < 9) { spawnBubble(Math.random() < 0.12); spawnT = rand(0.6, 1.3); }
+
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    b.t += dt; b.y += b.vy * dt; b.x += Math.sin(b.t * b.wob + b.ph) * U * 0.06 * dt;
+    if (b.y < -b.r * 1.2) bubbles.splice(i, 1);
+  }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.t += dt;
+    if (p.slow) { p.vx += Math.sin(p.t * 3 + p.rot) * 30 * dt; }
+    else { p.vy += U * 1.6 * dt; p.vx *= 0.99; }
+    p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+    if (p.t > p.life) parts.splice(i, 1);
+  }
+  for (let i = flyers.length - 1; i >= 0; i--) {
+    const f = flyers[i];
+    f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt;
+    if (f.t > f.life) flyers.splice(i, 1);
+  }
+  for (let i = rings.length - 1; i >= 0; i--) { rings[i].t += dt; if (rings[i].t > 0.4) rings.splice(i, 1); }
+  for (const c of clouds) { c.x += c.v * dt; if (c.x > 1.25) c.x = -0.25; }
+
+  // kid: walk, jump, faces
+  kid.t += dt;
+  if (kid.targetX !== null) {
+    const d = kid.targetX - kid.x, sp = U * 0.9 * dt;
+    if (Math.abs(d) < sp) kid.targetX = null; else kid.x += Math.sign(d) * sp;
+  }
+  kid.x = Math.max(kidH() * 0.3, Math.min(W - kidH() * 0.3, kid.x));
+  if (kid.air) {
+    kid.vy += U * 4.8 * dt; kid.jy += kid.vy * dt;
+    if (kid.jy >= 0) { kid.jy = 0; kid.vy = 0; kid.air = false; kid.squash = 1; SFX.boing(); }
+  }
+  if (kid.spin) { kid.spinT += dt * 1.6; if (kid.spinT >= 1) { kid.spin = 0; kid.spinT = 0; } }
+  kid.squash = Math.max(0, kid.squash - dt * 3);
+  if (kid.faceT > 0) { kid.faceT -= dt; if (kid.faceT <= 0) kid.face = 'calm'; }
+  // idle for a while: pull a funny face by herself
+  if (time - lastTap > 6 && kid.faceT <= 0 && Math.random() < dt * 0.4) kidSay(pick(['oh', 'yell']), 0.9);
+
+  sun.ang += dt * 0.3;
+  if (sun.spinT > 0) sun.spinT -= dt;
+  if (partyT > 0) partyT -= dt;
+  updatePeek(dt);
+
+  if (gearHold) {
+    gearHold.t += dt;
+    if (gearHold.t > 2) { gearHold = null; openParent(); }
+  }
+}
+
+// ---------- drawing ----------
+function drawStar(x, y, r) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r;
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath(); ctx.fill();
+}
+function drawHeart(x, y, r) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + r * 0.8);
+  ctx.bezierCurveTo(x - r * 1.4, y - r * 0.2, x - r * 0.6, y - r * 1.2, x, y - r * 0.4);
+  ctx.bezierCurveTo(x + r * 0.6, y - r * 1.2, x + r * 1.4, y - r * 0.2, x, y + r * 0.8);
+  ctx.fill();
+}
+function drawCloud(x, y, s) {
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  const r = U * 0.06 * s;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU); ctx.arc(x + r, y - r * 0.4, r * 1.2, 0, TAU);
+  ctx.arc(x + r * 2.1, y, r, 0, TAU); ctx.rect(x, y - r * 0.2, r * 2.1, r * 1.2);
+  ctx.fill();
+}
+
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#5ec8ff'); g.addColorStop(0.7, '#bfeaff'); g.addColorStop(1, '#e8f9ff');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  if (partyT > 0) {
+    const a = Math.min(1, partyT) * 0.55, cx = W / 2, cy = groundY, R = Math.max(W, H) * 0.55;
+    ['#ff4d4d', '#ff8c42', '#ffd23f', '#3bceac', '#4d96ff', '#b388ff'].forEach((c, i) => {
+      ctx.strokeStyle = c; ctx.globalAlpha = a; ctx.lineWidth = U * 0.03;
+      ctx.beginPath(); ctx.arc(cx, cy, R - i * U * 0.03, Math.PI, TAU); ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+  }
+  for (const c of clouds) drawCloud(c.x * W, c.y * H, c.s);
+
+  // sun with a face
+  const s = sunPos();
+  const spin = sun.spinT > 0 ? (1.2 - sun.spinT) * TAU * 1.5 : 0;
+  ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(sun.ang + spin);
+  ctx.fillStyle = '#ffd23f';
+  for (let i = 0; i < 12; i++) {
+    ctx.rotate(TAU / 12);
+    ctx.beginPath(); ctx.moveTo(-s.r * 0.18, -s.r * 1.05); ctx.lineTo(0, -s.r * (1.5 + 0.1 * Math.sin(time * 4 + i))); ctx.lineTo(s.r * 0.18, -s.r * 1.05); ctx.fill();
+  }
+  ctx.restore();
+  ctx.fillStyle = '#ffe066'; ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 1.08, 0, TAU); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, TAU); ctx.clip();
+  drawFace(sun.spinT > 0 ? 'yell' : 'oh', s.x, s.y + s.r * 0.08, s.r * 2.3, spin * 0.2);
+  ctx.restore();
+
+  // grass hill + flowers
+  ctx.fillStyle = '#6fd36f';
+  ctx.beginPath(); ctx.moveTo(0, groundY - U * 0.03);
+  ctx.quadraticCurveTo(W / 2, groundY - U * 0.1, W, groundY - U * 0.03);
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+  ctx.fillStyle = '#58c058'; ctx.fillRect(0, groundY + U * 0.04, W, H);
+  for (const f of flowers) {
+    const x = f.x * W, y = groundY + U * 0.02, r = U * 0.018, sw = Math.sin(time * 2 + f.ph) * 0.15;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(sw);
+    ctx.strokeStyle = '#2e8b57'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -r * 2.5); ctx.stroke();
+    ctx.fillStyle = f.c;
+    for (let i = 0; i < 5; i++) { const a = i * TAU / 5; ctx.beginPath(); ctx.arc(Math.cos(a) * r * 0.8, -r * 2.5 + Math.sin(a) * r * 0.8, r * 0.6, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(0, -r * 2.5, r * 0.5, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawBubble(b) {
+  const wob = Math.sin(b.t * 5 + b.ph) * 0.05;
+  const rx = b.r * (1 + wob), ry = b.r * (1 - wob);
+  ctx.save(); ctx.translate(b.x, b.y);
+  ctx.save(); ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, TAU); ctx.clip();
+  ctx.fillStyle = `hsla(${b.hue},90%,85%,.35)`; ctx.fillRect(-rx, -ry, rx * 2, ry * 2);
+  if (b.c.face) drawFace(b.c.face, 0, b.r * 0.05, b.r * 1.85, Math.sin(b.t * 2 + b.ph) * 0.15);
+  else {
+    ctx.font = `${b.r * 1.1}px "Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(b.c.emoji, 0, b.r * 0.08);
+  }
+  const g = ctx.createRadialGradient(0, 0, b.r * 0.6, 0, 0, b.r);
+  g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, `hsla(${b.hue},100%,75%,.55)`);
+  ctx.fillStyle = g; ctx.fillRect(-rx, -ry, rx * 2, ry * 2);
+  ctx.restore();
+  ctx.strokeStyle = `hsla(${b.hue},100%,90%,.9)`; ctx.lineWidth = Math.max(2, b.r * 0.05);
+  ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = Math.max(3, b.r * 0.08); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(0, 0, b.r * 0.72, Math.PI * 1.1, Math.PI * 1.4); ctx.stroke();
+  ctx.restore();
+}
+
+function drawKid() {
+  const h = kidH(), x = kid.x, base = groundY + kid.jy;
+  const bob = kid.air ? 0 : Math.abs(Math.sin(kid.t * 6)) * h * 0.02;
+  const sq = kid.squash * 0.18;
+  const walking = kid.targetX !== null && !kid.air;
+  ctx.save();
+  ctx.translate(x, base);
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,.15)';
+  ctx.beginPath(); ctx.ellipse(0, -kid.jy, h * 0.22 * (1 + kid.jy / (U * 0.5)), h * 0.04, 0, 0, TAU); ctx.fill();
+  ctx.translate(0, -bob);
+  if (kid.spin) { ctx.translate(0, -h * 0.5); ctx.rotate(kid.spin * kid.spinT * TAU); ctx.translate(0, h * 0.5); }
+  ctx.scale(1 + sq, 1 - sq);
+  ctx.rotate(Math.sin(kid.t * 3) * 0.04);
+
+  const skin = '#c98d6a';
+  // feet
+  const step = walking ? Math.sin(kid.t * 14) * h * 0.03 : 0;
+  ctx.fillStyle = skin;
+  ctx.beginPath(); ctx.ellipse(-h * 0.07, -h * 0.02 - Math.max(0, step), h * 0.05, h * 0.025, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(h * 0.07, -h * 0.02 - Math.max(0, -step), h * 0.05, h * 0.025, 0, 0, TAU); ctx.fill();
+
+  // arms (behind pallu, in front of blouse)
+  const shoulderY = -h * 0.57;
+  const wave = kid.air ? -2.4 : Math.sin(kid.t * 5) * 0.5 - 0.3;
+  const arm = (side, ang) => {
+    const sx = side * h * 0.15, len = h * 0.24;
+    const ex = sx + Math.sin(ang) * len * side, ey = shoulderY + Math.cos(ang) * len;
+    ctx.strokeStyle = skin; ctx.lineWidth = h * 0.055; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sx, shoulderY); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = '#dfe6ee'; ctx.lineWidth = h * 0.012;
+    const bx = sx + (ex - sx) * 0.82, by = shoulderY + (ey - shoulderY) * 0.82;
+    ctx.beginPath(); ctx.arc(bx, by, h * 0.03, 0, TAU); ctx.stroke();
+  };
+  arm(-1, -wave); arm(1, kid.air ? -2.4 : Math.sin(kid.t * 5 + 2) * 0.5 - 0.3);
+
+  // saree skirt
+  ctx.fillStyle = '#0aa58a';
+  ctx.beginPath();
+  ctx.moveTo(-h * 0.14, -h * 0.47); ctx.lineTo(h * 0.14, -h * 0.47);
+  ctx.lineTo(h * 0.21, -h * 0.03); ctx.lineTo(-h * 0.21, -h * 0.03); ctx.fill();
+  // gold border with blue edge
+  ctx.fillStyle = '#e8b923'; ctx.fillRect(-h * 0.21, -h * 0.1, h * 0.42, h * 0.07);
+  ctx.fillStyle = '#2343d6'; ctx.fillRect(-h * 0.21, -h * 0.04, h * 0.42, h * 0.015);
+  for (let i = 0; i < 6; i++) {
+    ctx.fillStyle = ['#d0306f', '#3a2fd1', '#1e9e5a'][i % 3];
+    ctx.beginPath(); ctx.arc(-h * 0.175 + i * h * 0.07, -h * 0.067, h * 0.015, 0, TAU); ctx.fill();
+  }
+  // pleats
+  ctx.strokeStyle = 'rgba(0,0,0,.12)'; ctx.lineWidth = h * 0.008;
+  for (const px of [-0.03, 0.02, 0.07]) { ctx.beginPath(); ctx.moveTo(px * h, -h * 0.42); ctx.lineTo(px * h * 1.4, -h * 0.1); ctx.stroke(); }
+
+  // blouse
+  ctx.fillStyle = '#1f4fd8';
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-h * 0.16, -h * 0.6, h * 0.32, h * 0.15, h * 0.05) : ctx.rect(-h * 0.16, -h * 0.6, h * 0.32, h * 0.15); ctx.fill();
+  // pallu across the chest
+  ctx.fillStyle = '#e8b923';
+  ctx.beginPath();
+  ctx.moveTo(h * 0.05, -h * 0.61); ctx.lineTo(h * 0.17, -h * 0.6);
+  ctx.lineTo(-h * 0.1, -h * 0.4); ctx.lineTo(-h * 0.18, -h * 0.44); ctx.fill();
+  ctx.fillStyle = '#0aa58a';
+  ctx.beginPath();
+  ctx.moveTo(h * 0.085, -h * 0.605); ctx.lineTo(h * 0.13, -h * 0.6);
+  ctx.lineTo(-h * 0.12, -h * 0.415); ctx.lineTo(-h * 0.155, -h * 0.43); ctx.fill();
+  // bead necklace
+  ctx.fillStyle = '#f2a516';
+  for (let i = 0; i < 7; i++) {
+    const a = Math.PI * (0.15 + i * 0.7 / 6);
+    ctx.beginPath(); ctx.arc(Math.cos(a) * h * 0.07, -h * 0.62 + Math.sin(a) * h * 0.045, h * 0.011, 0, TAU); ctx.fill();
+  }
+
+  // the face!
+  const fh = h * 0.42;
+  const fs = kid.face === 'yell' ? 1 + Math.sin(kid.t * 30) * 0.04 : 1;
+  drawFace(kid.face, 0, -h * 0.6 - fh * 0.45, fh, Math.sin(kid.t * 2.5) * 0.08, fs, 2 - fs);
+  ctx.restore();
+}
+
+function drawPeek() {
+  if (peek.state === 'idle') return;
+  const g = peekGeom();
+  const spin = peek.spinT > 0 ? (1 - peek.spinT) * TAU : 0;
+  const wig = Math.sin(time * 8) * 0.08;
+  drawFace(peek.spinT > 0 ? 'yell' : 'oh', g.x, g.y, g.h, g.rot + wig + spin);
+}
+
+function drawParts() {
+  for (const r of rings) {
+    ctx.strokeStyle = `rgba(255,255,255,${1 - r.t / 0.4})`; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r * (1 + r.t * 2.5), 0, TAU); ctx.stroke();
+  }
+  for (const f of flyers) {
+    const k = f.t / f.life, a = k > 0.6 ? 1 - (k - 0.6) / 0.4 : 1;
+    const st = 1 + 0.35 * Math.sin(f.t * 25) * Math.exp(-3 * f.t);
+    const size = f.s * (1 + f.t * 1.2);
+    ctx.globalAlpha = Math.max(0, a);
+    if (f.face) drawFace(f.face, f.x, f.y, size, f.rot, st, 2 - st);
+    else {
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); ctx.scale(st, 2 - st);
+      ctx.font = `${size * 0.6}px "Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(f.emoji, 0, 0);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+  for (const p of parts) {
+    ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
+    ctx.fillStyle = p.c;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+    if (p.shape === 'rect') ctx.fillRect(-p.s, -p.s / 2, p.s * 2, p.s);
+    else if (p.shape === 'star') drawStar(0, 0, p.s * 1.3);
+    else if (p.shape === 'heart') drawHeart(0, 0, p.s);
+    else { ctx.beginPath(); ctx.arc(0, 0, p.s * 0.8, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawGear() {
+  const x = 26, y = 26, r = 10;
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(255,255,255,.45)';
+  for (let i = 0; i < 8; i++) { ctx.rotate(TAU / 8); ctx.fillRect(-2.5, -r - 4, 5, 6); }
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(94,200,255,.9)'; ctx.beginPath(); ctx.arc(0, 0, 4, 0, TAU); ctx.fill();
+  ctx.restore();
+  if (gearHold) {
+    ctx.strokeStyle = '#ff5fa2'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(x, y, r + 9, -Math.PI / 2, -Math.PI / 2 + TAU * gearHold.t / 2); ctx.stroke();
+  }
+}
+
+function draw() {
+  drawBackground();
+  for (const b of bubbles) if (b.r < U * 0.15) drawBubble(b);
+  drawKid();
+  for (const b of bubbles) if (b.r >= U * 0.15) drawBubble(b);
+  drawPeek();
+  drawParts();
+  drawGear();
+}
+
+let last = performance.now(), paused = false;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (!paused) { update(dt); draw(); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- parents' corner ----------
+const panel = document.getElementById('parent');
+const fileIn = document.getElementById('file');
+const cropper = document.getElementById('cropper');
+const cropCv = document.getElementById('cropCv'), cctx = cropCv.getContext('2d');
+const zoomEl = document.getElementById('zoom');
+const soundEl = document.getElementById('soundOn');
+const exitBtn = document.getElementById('exitApp');
+let cropKey = null, crop = null;
+
+if (window.AndroidApp) exitBtn.hidden = false;
+function openParent() { paused = true; soundEl.checked = soundOn; refreshSlots(); panel.classList.add('open'); }
+function closeParent() { panel.classList.remove('open'); cropper.hidden = true; paused = false; last = performance.now(); }
+document.getElementById('closeParent').onclick = closeParent;
+exitBtn.onclick = () => window.AndroidApp && window.AndroidApp.exit();
+soundEl.onchange = () => { soundOn = soundEl.checked; try { localStorage.setItem('babySound', soundOn ? '1' : '0'); } catch (e) {} };
+document.getElementById('resetFaces').onclick = () => {
+  try { localStorage.removeItem('babyFaces'); } catch (e) {}
+  loadFaces();
+};
+
+function refreshSlots() {
+  document.querySelectorAll('.slot').forEach(slot => {
+    const c = slot.querySelector('canvas'), g = c.getContext('2d'), img = faces[slot.dataset.k];
+    g.clearRect(0, 0, c.width, c.height);
+    if (!img) return;
+    const h = c.height, w = h * aspect(img);
+    g.drawImage(img, (c.width - w) / 2, 0, w, h);
+  });
+}
+document.querySelectorAll('.slot button').forEach(btn => {
+  btn.onclick = () => { cropKey = btn.parentElement.dataset.k; fileIn.click(); };
+});
+
+// crop editor: oval window, drag to move, slider to zoom
+const CW = cropCv.width, CH = cropCv.height;
+const OV = { x: CW / 2, y: CH / 2, rx: CW * 0.44, ry: CH * 0.45 };
+fileIn.onchange = () => {
+  const f = fileIn.files[0]; fileIn.value = '';
+  if (!f) return;
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = () => {
+    crop = { img, url, base: Math.max(CW / img.width, CH / img.height), zoom: 1, ox: 0, oy: 0 };
+    zoomEl.value = 1; cropper.hidden = false; drawCrop();
+    cropper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  img.onerror = () => URL.revokeObjectURL(url);
+  img.src = url;
+};
+function placeCrop(g) {
+  const s = crop.base * crop.zoom, w = crop.img.width * s, h = crop.img.height * s;
+  g.drawImage(crop.img, CW / 2 - w / 2 + crop.ox, CH / 2 - h / 2 + crop.oy, w, h);
+}
+function drawCrop() {
+  cctx.clearRect(0, 0, CW, CH);
+  placeCrop(cctx);
+  cctx.fillStyle = 'rgba(0,0,0,.6)';
+  cctx.beginPath(); cctx.rect(0, 0, CW, CH); cctx.ellipse(OV.x, OV.y, OV.rx, OV.ry, 0, 0, TAU); cctx.fill('evenodd');
+  cctx.strokeStyle = '#fff'; cctx.lineWidth = 3; cctx.setLineDash([10, 8]);
+  cctx.beginPath(); cctx.ellipse(OV.x, OV.y, OV.rx, OV.ry, 0, 0, TAU); cctx.stroke(); cctx.setLineDash([]);
+}
+zoomEl.oninput = () => { if (crop) { crop.zoom = +zoomEl.value; drawCrop(); } };
+let drag = null;
+cropCv.addEventListener('pointerdown', e => { if (!crop) return; drag = { x: e.clientX, y: e.clientY }; cropCv.setPointerCapture(e.pointerId); });
+cropCv.addEventListener('pointermove', e => {
+  if (!drag || !crop) return;
+  const k = CW / cropCv.clientWidth;
+  crop.ox += (e.clientX - drag.x) * k; crop.oy += (e.clientY - drag.y) * k;
+  drag = { x: e.clientX, y: e.clientY }; drawCrop();
+});
+cropCv.addEventListener('pointerup', () => { drag = null; });
+document.getElementById('cropCancel').onclick = () => { cropper.hidden = true; if (crop) URL.revokeObjectURL(crop.url); crop = null; };
+document.getElementById('cropSave').onclick = () => {
+  if (!crop || !cropKey) return;
+  const out = document.createElement('canvas');
+  out.width = Math.round(OV.rx * 2 * 0.8); out.height = Math.round(OV.ry * 2 * 0.8);
+  const g = out.getContext('2d');
+  g.scale(0.8, 0.8); g.translate(-(OV.x - OV.rx), -(OV.y - OV.ry));
+  g.beginPath(); g.ellipse(OV.x, OV.y, OV.rx, OV.ry, 0, 0, TAU); g.clip();
+  placeCrop(g);
+  const data = out.toDataURL('image/png');
+  const saved = savedFaces(); saved[cropKey] = data;
+  try { localStorage.setItem('babyFaces', JSON.stringify(saved)); }
+  catch (e) { alert('Could not save the photo (storage full).'); }
+  faces[cropKey] = out;
+  URL.revokeObjectURL(crop.url); crop = null;
+  cropper.hidden = true; refreshSlots();
+};
+})();
+</script>
+</body>
+</html>
