@@ -54,6 +54,9 @@ class Config:
     sha256_start: Optional[int] = None   # where the image SHA-256 is stored
     sha256_length: Optional[int] = None  # length of the stored SHA-256
     mem_check: int = 0               # memory-check flag
+    lzo: bool = False                # LZO-compress segments before TransferData
+    lzo_method: int = 0x1            # dataFormat compression nibble when lzo on
+    unlock_all: bool = False         # attempt to unlock all security levels
 
     # --- timing ---
     p2_timeout: float = 2.0

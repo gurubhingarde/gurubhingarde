@@ -82,6 +82,19 @@ original `Actiway_DownLoad_Tool.xml` — you can point `--presets-file` at your
 own copy). Explicit flags like `--block-size` still override the preset. In
 the GUI the same list appears as the **Mapping** and **Zone** dropdowns.
 
+**LZO Compression** and **Unlock All** (the two checkboxes from the original)
+are supported too:
+
+```bash
+pip install 'dltool[lzo]'     # LZO needs python-lzo
+dltool flash --preset "Multic-S -> APP_EA_Vx_xx" --lzo --unlock-all \
+       --doip-host 192.168.1.20 --ecu-addr 0x0E80 firmware.mot
+```
+
+`--lzo` compresses each segment and sets the RequestDownload compression
+nibble; `--unlock-all` tries every SecurityAccess level. The exact LZO framing
+is ECU-specific — verify against a known-good transfer before trusting it.
+
 ### CAN / CAN-FD instead of DoIP
 
 ```bash

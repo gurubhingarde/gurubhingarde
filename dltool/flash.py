@@ -70,12 +70,20 @@ def flash_segment(
     progress: Optional[ProgressCb] = None,
 ) -> None:
     """RequestDownload + TransferData* + RequestTransferExit for one segment."""
+    payload_data = bytes(segment.data)
+    data_format = cfg.data_format
+    if cfg.lzo:
+        from .compression import lzo_compress
+        payload_data = lzo_compress(payload_data)
+        data_format = ((cfg.lzo_method & 0xF) << 4) | (cfg.encryption & 0xF)
+        log.info("LZO: segment %d -> %d bytes compressed", segment.size, len(payload_data))
+    # ISO 14229 memorySize is the uncompressed size even when compression is used.
     max_block = client.request_download(
         segment.start_addr,
         segment.size,
         addr_len=cfg.addr_len,
         size_len=cfg.size_len,
-        data_format=cfg.data_format,
+        data_format=data_format,
     )
     # The server's maxNumberOfBlockLength includes the service+counter bytes;
     # reserve 2 for SID+blockSequenceCounter. Honour the configured cap too.
@@ -85,7 +93,7 @@ def flash_segment(
 
     counter = 1
     sent = 0
-    data = bytes(segment.data)
+    data = payload_data
     for off in range(0, len(data), chunk):
         client.transfer_data(counter, data[off:off + chunk])
         counter = (counter + 1) & 0xFF
@@ -137,8 +145,18 @@ def flash_firmware(
         client.diagnostic_session_control(Session.PROGRAMMING)
         tp.start()
 
-        log.info("security access level 0x%02X", cfg.security_level)
-        client.unlock(cfg.security_level, key_fn)
+        levels = [cfg.security_level]
+        if cfg.unlock_all:
+            # try every odd request-seed level the ECU might expose
+            levels = sorted({cfg.security_level, 0x01, 0x03, 0x05, 0x07, 0x09, 0x11})
+        for lvl in levels:
+            try:
+                log.info("security access level 0x%02X", lvl)
+                client.unlock(lvl, key_fn)
+            except Exception as exc:  # noqa: BLE001
+                if not cfg.unlock_all:
+                    raise
+                log.warning("security level 0x%02X not unlocked: %s", lvl, exc)
 
         for block in firmware.blocks:
             log.info("flashing block %r (%d bytes)", block.name, block.total_size)

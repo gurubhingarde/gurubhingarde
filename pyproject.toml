@@ -16,6 +16,7 @@ dependencies = []
 [project.optional-dependencies]
 # CAN / CAN-FD transports need hardware driver bindings. DoIP needs nothing extra.
 can = ["python-can>=4.2", "can-isotp>=2.0"]
+lzo = ["python-lzo>=1.14"]
 dev = ["pytest>=7.0"]
 
 [project.scripts]

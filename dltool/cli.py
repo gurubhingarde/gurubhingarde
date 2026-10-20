@@ -169,6 +169,8 @@ def cmd_flash(args) -> int:
         cfg.block_size = parse_addr(args.block_size)
     if args.security_level is not None:
         cfg.security_level = parse_addr(args.security_level)
+    cfg.lzo = args.lzo
+    cfg.unlock_all = args.unlock_all
 
     fw = parse_srecord_file(args.file)
     print(f"Firmware: {args.file}  ({fw.total_size} bytes, {len(fw.blocks)} block(s))")
@@ -268,6 +270,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--sec-secret", help="hex secret for the built-in XOR key algorithm")
     sp.add_argument("--erase-routine", help="RoutineControl id to erase before download")
     sp.add_argument("--check-routine", help="RoutineControl id to check after download")
+    sp.add_argument("--lzo", action="store_true", help="LZO-compress segments (needs dltool[lzo])")
+    sp.add_argument("--unlock-all", action="store_true", help="attempt all security levels")
     sp.add_argument("--no-reset", action="store_true", help="skip ECUReset at the end")
     sp.add_argument("--dry-run", action="store_true", help="parse + print plan, do not connect")
     sp.set_defaults(func=cmd_flash)

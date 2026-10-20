@@ -111,6 +111,10 @@ class DltoolGui(tk.Tk):
         self.sec_key = tk.StringVar(value="0xFFFF")
         ttk.Label(mapf, text="Sec key:").pack(side="left", padx=(10, 2))
         ttk.Entry(mapf, textvariable=self.sec_key, width=12).pack(side="left")
+        self.lzo = tk.BooleanVar(value=False)
+        ttk.Checkbutton(mapf, text="LZO Compression", variable=self.lzo).pack(side="left", padx=(12, 2))
+        self.unlock_all = tk.BooleanVar(value=False)
+        ttk.Checkbutton(mapf, text="Unlock All", variable=self.unlock_all).pack(side="left", padx=(6, 2))
 
         opts = ttk.Frame(flashf)
         opts.grid(row=2, column=0, columnspan=3, sticky="w")
@@ -252,6 +256,8 @@ class DltoolGui(tk.Tk):
             cfg.can_extended_id = cfg.can_tx_id > 0x7FF
         cfg.preset_name = self.mapping.get()
         cfg.security_key = self.sec_key.get().strip() or cfg.security_key
+        cfg.lzo = bool(self.lzo.get())
+        cfg.unlock_all = bool(self.unlock_all.get())
         for z in self._zones:
             if z.name == self.zone.get():
                 cfg.zone = z.value
