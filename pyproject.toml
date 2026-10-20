@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dltool"
+version = "0.1.0"
+description = "Open DoIP/CAN ECU diagnostic and flash-download tool (clean-room, ISO 13400 / 14229 / 15765-2)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "gurubhingarde" }]
+keywords = ["doip", "uds", "iso14229", "iso13400", "can", "canfd", "isotp", "ecu", "flash", "diagnostics"]
+dependencies = []
+
+[project.optional-dependencies]
+# CAN / CAN-FD transports need hardware driver bindings. DoIP needs nothing extra.
+can = ["python-can>=4.2", "can-isotp>=2.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+dltool = "dltool.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dltool*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
