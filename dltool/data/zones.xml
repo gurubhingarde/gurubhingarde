@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Memory zones for the Zone dropdown. Same schema as Actiway_Zones_Config.xml. -->
+<Zones>
+  <Zone><Name>0  : Main MCU Application (*)</Name><Index>0</Index><Value>0</Value></Zone>
+  <Zone><Name>1  : Main MCU Calibration (*)</Name><Index>1</Index><Value>1</Value></Zone>
+  <Zone><Name>2  : Main MCU Data</Name><Index>2</Index><Value>2</Value></Zone>
+  <Zone><Name>3  : Main MCU AppAndData</Name><Index>3</Index><Value>3</Value></Zone>
+  <Zone><Name>4  : Main MCU Eeprom</Name><Index>4</Index><Value>4</Value></Zone>
+  <Zone><Name>5  : Main MCU NVRam</Name><Index>5</Index><Value>5</Value></Zone>
+  <Zone><Name>10: Aux MCU Application</Name><Index>6</Index><Value>10</Value></Zone>
+  <Zone><Name>11: Aux MCU Calibration</Name><Index>7</Index><Value>11</Value></Zone>
+  <Zone><Name>12: Aux MCU Data</Name><Index>8</Index><Value>12</Value></Zone>
+  <Zone><Name>13: Aux MCU Application and Data</Name><Index>9</Index><Value>13</Value></Zone>
+  <Zone><Name>14: Aux MCU Eeprom</Name><Index>10</Index><Value>14</Value></Zone>
+  <Zone><Name>15: Aux MCU NVRam</Name><Index>11</Index><Value>15</Value></Zone>
+  <Zone><Name>20: FPGA Bitstream</Name><Index>12</Index><Value>20</Value></Zone>
+  <Zone><Name>30: PLCRteAll</Name><Index>13</Index><Value>30</Value></Zone>
+  <Zone><Name>31: PLCRte</Name><Index>14</Index><Value>31</Value></Zone>
+  <Zone><Name>32: PLC application code</Name><Index>15</Index><Value>32</Value></Zone>
+  <Zone><Name>33: PLC Application Calibration</Name><Index>16</Index><Value>33</Value></Zone>
+  <Zone><Name>34: PLC Secondary Application</Name><Index>17</Index><Value>34</Value></Zone>
+</Zones>

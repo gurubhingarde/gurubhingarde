@@ -75,6 +75,25 @@ def cmd_discover(args) -> int:
     return 0
 
 
+def cmd_presets(args) -> int:
+    from .presets import load_presets, load_zones
+    presets = load_presets(args.file)
+    print(f"Mapping presets ({len(presets)}):\n")
+    for p in presets:
+        extra = []
+        if p.seckey is not None:
+            extra.append(f"seckey=0x{p.seckey:X}")
+        if p.sha256_start is not None:
+            extra.append(f"sha256@0x{p.sha256_start:08X}")
+        print(f"  {p}  blkCAN=0x{p.min_data_can:X} blkDoIP=0x{p.min_data_doip:X} "
+              + " ".join(extra))
+    if args.zones:
+        print("\nZones:")
+        for z in load_zones():
+            print(f"  idx {z.index:<2} value {z.value:<3} {z.name}")
+    return 0
+
+
 def cmd_srec(args) -> int:
     fw = parse_srecord_file(args.file)
     print(f"File: {args.file}")
@@ -138,6 +157,14 @@ def cmd_session(args) -> int:
 def cmd_flash(args) -> int:
     from .flash import flash_firmware
     cfg = _cfg_from_args(args)
+    # Apply a Mapping preset first (sets zone, flash window, block size, seckey);
+    # explicit flags below still override it.
+    if args.preset:
+        from .presets import load_presets, find_preset, apply_preset
+        preset = find_preset(load_presets(args.presets_file), args.preset)
+        apply_preset(cfg, preset)
+        print(f"Mapping: {preset.desc}  (zone={cfg.zone}, "
+              f"window=0x{preset.start:08X}..0x{preset.end:08X}, block=0x{cfg.block_size:X})")
     if args.block_size is not None:
         cfg.block_size = parse_addr(args.block_size)
     if args.security_level is not None:
@@ -211,6 +238,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("file")
     sp.set_defaults(func=cmd_srec)
 
+    sp = sub.add_parser("presets", help="list Mapping presets (and zones)")
+    sp.add_argument("--file", help="preset XML (default: bundled presets.xml)")
+    sp.add_argument("--zones", action="store_true", help="also list memory zones")
+    sp.set_defaults(func=cmd_presets)
+
     sp = sub.add_parser("session", help="connectivity test (open a session)")
     add_common(sp)
     sp.set_defaults(func=cmd_session)
@@ -227,6 +259,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("flash", help="download an S-record firmware to the ECU")
     add_common(sp)
     sp.add_argument("file", help="S-record (.s19/.srec/.mot) firmware file")
+    sp.add_argument("--preset", help='Mapping preset, e.g. "Multic-S -> CALIB"')
+    sp.add_argument("--presets-file", help="preset XML (default: bundled presets.xml)")
     sp.add_argument("--block-size", help="max TransferData block (e.g. 0x400)")
     sp.add_argument("--security-level", help="SecurityAccess request-seed level (odd)")
     sp.add_argument("--sec-algo", choices=security.available(),

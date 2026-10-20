@@ -46,6 +46,15 @@ class Config:
     compression: int = 0x0           # data-format high nibble (0 = none)
     encryption: int = 0x0            # data-format low nibble (0 = none)
 
+    # --- mapping / zone preset (from Actiway_DownLoad_Tool.xml / Zones_Config) ---
+    preset_name: str = ""            # selected Mapping desc, e.g. "Multic-S -> CALIB"
+    zone: int = 0                    # memory zone value
+    addr_start: Optional[int] = None  # flash window start (preset)
+    addr_end: Optional[int] = None    # flash window end (preset, inclusive)
+    sha256_start: Optional[int] = None   # where the image SHA-256 is stored
+    sha256_length: Optional[int] = None  # length of the stored SHA-256
+    mem_check: int = 0               # memory-check flag
+
     # --- timing ---
     p2_timeout: float = 2.0
     p2_star_timeout: float = 5.0

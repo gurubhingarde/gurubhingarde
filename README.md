@@ -65,6 +65,23 @@ dltool -v flash --doip-host 192.168.1.20 --ecu-addr 0x0E80 \
        --block-size 0x400 firmware.s19
 ```
 
+### Mapping presets (the "Configuration" dropdown)
+
+Like the original tool's **Mapping** dropdown, a preset bundles the product's
+flash window (start/end), per-transport block size, zone, security key and
+SHA-256 location. List them and flash with one:
+
+```bash
+dltool presets --zones                       # show all mappings + memory zones
+dltool flash --doip-host 192.168.1.20 --ecu-addr 0x0E80 \
+       --preset "Multic-S -> CALIB" firmware.s19
+```
+
+The preset list lives in `dltool/data/presets.xml` (same schema as the
+original `Actiway_DownLoad_Tool.xml` — you can point `--presets-file` at your
+own copy). Explicit flags like `--block-size` still override the preset. In
+the GUI the same list appears as the **Mapping** and **Zone** dropdowns.
+
 ### CAN / CAN-FD instead of DoIP
 
 ```bash

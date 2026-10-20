@@ -25,5 +25,8 @@ dltool-gui = "dltool.gui:main"
 [tool.setuptools.packages.find]
 include = ["dltool*"]
 
+[tool.setuptools.package-data]
+dltool = ["data/*.xml"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

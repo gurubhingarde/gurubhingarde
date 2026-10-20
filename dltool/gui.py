@@ -86,8 +86,34 @@ class DltoolGui(tk.Tk):
         ttk.Button(flashf, text="Inspect", command=self.on_inspect).grid(row=0, column=2, padx=3)
         flashf.columnconfigure(0, weight=1)
 
+        # Mapping (preset) + Zone row — mirrors the original Configuration box.
+        mapf = ttk.Frame(flashf)
+        mapf.grid(row=1, column=0, columnspan=3, sticky="we", pady=2)
+        ttk.Label(mapf, text="Mapping:").pack(side="left", padx=(6, 2))
+        self._presets = []
+        self._zones = []
+        try:
+            from .presets import load_presets, load_zones
+            self._presets = load_presets()
+            self._zones = load_zones()
+        except Exception as exc:  # noqa: BLE001
+            self.after(100, lambda: self.logln(f"(presets not loaded: {exc})"))
+        self.mapping = tk.StringVar()
+        self.cmb_mapping = ttk.Combobox(
+            mapf, textvariable=self.mapping, width=28, state="readonly",
+            values=[p.desc for p in self._presets])
+        self.cmb_mapping.pack(side="left")
+        self.cmb_mapping.bind("<<ComboboxSelected>>", self._on_mapping)
+        ttk.Label(mapf, text="Zone:").pack(side="left", padx=(10, 2))
+        self.zone = tk.StringVar(value="0")
+        ttk.Combobox(mapf, textvariable=self.zone, width=24, state="readonly",
+                     values=[z.name for z in self._zones]).pack(side="left")
+        self.sec_key = tk.StringVar(value="0xFFFF")
+        ttk.Label(mapf, text="Sec key:").pack(side="left", padx=(10, 2))
+        ttk.Entry(mapf, textvariable=self.sec_key, width=12).pack(side="left")
+
         opts = ttk.Frame(flashf)
-        opts.grid(row=1, column=0, columnspan=3, sticky="w")
+        opts.grid(row=2, column=0, columnspan=3, sticky="w")
         self.sec_algo = tk.StringVar(value="passthrough")
         ttk.Label(opts, text="Security algo:").pack(side="left", padx=(6, 2))
         ttk.Combobox(opts, textvariable=self.sec_algo, values=security.available(),
@@ -98,7 +124,7 @@ class DltoolGui(tk.Tk):
         self.btn_flash.pack(side="left", padx=10)
 
         self.progress = ttk.Progressbar(flashf, mode="determinate")
-        self.progress.grid(row=2, column=0, columnspan=3, sticky="we", padx=6, pady=4)
+        self.progress.grid(row=3, column=0, columnspan=3, sticky="we", padx=6, pady=4)
 
         # Log output
         logf = ttk.LabelFrame(self, text="Log")
@@ -126,6 +152,28 @@ class DltoolGui(tk.Tk):
         var = tk.StringVar(value=default)
         ttk.Entry(parent, textvariable=var, width=width).pack(side="left")
         return var
+
+    def _on_mapping(self, _event=None):
+        """Apply the selected Mapping preset to the Zone/Sec-key/Block fields."""
+        from .presets import find_preset
+        try:
+            p = find_preset(self._presets, self.mapping.get())
+        except KeyError:
+            return
+        tp = self.transport.get()
+        self.block_size.set(f"0x{p.block_size(tp):X}")
+        if p.seckey is not None:
+            self.sec_key.set(f"0x{p.seckey:X}")
+        # reflect the preset's zone in the Zone dropdown
+        for z in self._zones:
+            if z.value == p.zone:
+                self.zone.set(z.name)
+                break
+        win = (f"0x{p.start:08X}..0x{p.end:08X}"
+               if p.start is not None else "-")
+        self.logln(f"Mapping '{p.desc}': zone={p.zone}, window={win}, "
+                   f"block=0x{p.block_size(tp):X}"
+                   + (f", seckey=0x{p.seckey:X}" if p.seckey is not None else ""))
 
     def _sync_transport(self):
         if self.transport.get() == "doip":
@@ -202,6 +250,12 @@ class DltoolGui(tk.Tk):
             cfg.can_rx_id = parse_addr(self.can_rx.get())
             cfg.can_fd = bool(self.can_fd.get())
             cfg.can_extended_id = cfg.can_tx_id > 0x7FF
+        cfg.preset_name = self.mapping.get()
+        cfg.security_key = self.sec_key.get().strip() or cfg.security_key
+        for z in self._zones:
+            if z.name == self.zone.get():
+                cfg.zone = z.value
+                break
         return cfg
 
     def _open_client(self, cfg: Config):
