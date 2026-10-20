@@ -25,6 +25,24 @@ pip install -e '.[dev]'     # tests
 DoIP needs nothing beyond the standard library. CAN needs `python-can` plus a
 driver for your hardware.
 
+## GUI quick start
+
+A desktop GUI (Tkinter — bundled with standard Python on Windows/macOS) wraps
+the whole tool: discover, read ECU info, pick a firmware file, and flash with a
+progress bar.
+
+```bash
+dltool-gui            # or:  python -m dltool.gui
+```
+
+Steps in the window: choose **DoIP** or **CAN** → (DoIP) click **Discover** or
+type the ECU IP → **Read ECU Info** to confirm the link → **Browse…** for the
+`.s19` file → pick the security algorithm → **FLASH**.
+
+On Linux, Tkinter may need a system package first: `sudo apt install python3-tk`
+(Debian/Ubuntu) or `sudo dnf install python3-tkinter` (Fedora). Windows/macOS
+need nothing extra.
+
 ## CLI quick start
 
 ```bash
