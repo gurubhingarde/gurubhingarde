@@ -13,6 +13,51 @@ import time
 from .base import Transport, TransportError
 
 
+def _solve(bitrate: int, f_clock: int, tseg1_max: int, tseg2_max: int,
+           sample_point: float = 0.8):
+    """Find (brp, tseg1, tseg2) for `bitrate` from `f_clock`. Returns None if no
+    exact division is found."""
+    for brp in range(1, 65):
+        total = f_clock / (brp * bitrate)
+        if abs(total - round(total)) > 1e-9:
+            continue
+        total = round(total)
+        if total < 4:
+            continue
+        tseg1 = round(total * sample_point) - 1
+        tseg2 = total - 1 - tseg1
+        if 1 <= tseg1 <= tseg1_max and 1 <= tseg2 <= tseg2_max:
+            return brp, tseg1, tseg2
+    return None
+
+
+def make_bus(bustype: str, channel: str, is_fd: bool, bitrate: int,
+             data_bitrate: int, f_clock: int = 80_000_000):
+    """Open a python-can bus, handling PCAN CAN-FD bit-timing (which needs full
+    timing parameters, not just data_bitrate)."""
+    import can
+
+    if is_fd and bustype == "pcan":
+        try:
+            from can import BitTimingFd
+            nom = _solve(bitrate, f_clock, 256, 128)
+            dat = _solve(data_bitrate, f_clock, 32, 16)
+            if nom and dat:
+                timing = BitTimingFd(
+                    f_clock=f_clock,
+                    nom_brp=nom[0], nom_tseg1=nom[1], nom_tseg2=nom[2], nom_sjw=min(nom[2], 16),
+                    data_brp=dat[0], data_tseg1=dat[1], data_tseg2=dat[2], data_sjw=min(dat[2], 8),
+                )
+                return can.Bus(interface="pcan", channel=channel, fd=True, timing=timing)
+        except Exception:
+            pass  # fall through to the simple path below
+
+    kwargs = dict(interface=bustype, channel=channel, fd=is_fd, bitrate=bitrate)
+    if is_fd:
+        kwargs["data_bitrate"] = data_bitrate
+    return can.Bus(**kwargs)
+
+
 class CanIsoTpTransport(Transport):
     name = "CAN / CAN-FD (ISO-TP)"
 
@@ -43,11 +88,15 @@ class CanIsoTpTransport(Transport):
                 "python-can / can-isotp not installed: "
                 "pip install python-can can-isotp") from e
 
-        kwargs = dict(interface=self.bustype, channel=self.channel,
-                      fd=self.is_fd, bitrate=self.bitrate)
-        if self.is_fd:
-            kwargs["data_bitrate"] = self.data_bitrate
-        self._bus = can.Bus(**kwargs)
+        try:
+            self._bus = make_bus(self.bustype, self.channel, self.is_fd,
+                                  self.bitrate, self.data_bitrate)
+        except Exception as e:
+            raise TransportError(
+                f"could not open {self.bustype}:{self.channel} ({e}). "
+                "If PCAN: close PCAN-View / the supplier tool (the channel may be "
+                "busy), check the channel name, or untick CAN-FD to try classic CAN."
+            ) from e
 
         addr = isotp.Address(isotp.AddressingMode.Normal_29bits
                              if self.extended_id else isotp.AddressingMode.Normal_11bits,

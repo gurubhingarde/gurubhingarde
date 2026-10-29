@@ -64,15 +64,19 @@ def autodetect_can(bustype: str, channel: str, is_fd: bool = True,
     Uses python-can directly (raw frames), independent of the ISO-TP stack.
     """
     try:
-        import can
+        import can  # noqa: F401
     except ImportError as e:
         raise RuntimeError("python-can not installed: pip install python-can") from e
     import time
 
-    kwargs = dict(interface=bustype, channel=channel, fd=is_fd, bitrate=bitrate)
-    if is_fd:
-        kwargs["data_bitrate"] = data_bitrate
-    bus = can.Bus(**kwargs)
+    from .transport.can_isotp import make_bus
+    try:
+        bus = make_bus(bustype, channel, is_fd, bitrate, data_bitrate)
+    except Exception as e:
+        raise RuntimeError(
+            f"could not open {bustype}:{channel} ({e}). If PCAN: close PCAN-View / "
+            "the supplier tool (channel busy), verify the channel name, or untick "
+            "CAN-FD to try classic CAN.") from e
     found: dict[int, Found] = {}
     try:
         for probe_id, ext in PROBES:
