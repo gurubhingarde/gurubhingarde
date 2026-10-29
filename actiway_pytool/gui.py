@@ -55,12 +55,14 @@ class App(tk.Tk):
         # action bar
         bar = ttk.Frame(self)
         bar.pack(fill="x", padx=8)
+        self.btn_detect = ttk.Button(bar, text="Autodetect", command=self.on_detect)
         self.btn_info = ttk.Button(bar, text="Read ECU Info", command=self.on_info)
         self.btn_flash = ttk.Button(bar, text="Flash", command=self.on_flash)
         self.btn_abort = ttk.Button(bar, text="Abort", command=self.on_abort, state="disabled")
-        self.btn_info.pack(side="left")
-        self.btn_flash.pack(side="left", padx=6)
-        self.btn_abort.pack(side="left")
+        self.btn_detect.pack(side="left")
+        self.btn_info.pack(side="left", padx=6)
+        self.btn_flash.pack(side="left")
+        self.btn_abort.pack(side="left", padx=6)
         self.progress = ttk.Progressbar(bar, mode="determinate", length=320)
         self.progress.pack(side="right", padx=4)
         self.pct = ttk.Label(bar, text="0%")
@@ -90,8 +92,8 @@ class App(tk.Tk):
         self.var_can_bustype = tk.StringVar(value="pcan")
         self.var_can_channel = tk.StringVar(value="PCAN_USBBUS1")
         self.var_can_fd = tk.BooleanVar(value=True)
-        self.var_can_req = tk.StringVar(value="0x18DA10F9")
-        self.var_can_resp = tk.StringVar(value="0x18DAF910")
+        self.var_can_req = tk.StringVar(value="0x18DA00F9")   # set by Autodetect
+        self.var_can_resp = tk.StringVar(value="0x18DAF900")  # set by Autodetect
         self.var_can_bitrate = tk.StringVar(value="500000")
         self.var_can_dbitrate = tk.StringVar(value="2000000")
 
@@ -290,6 +292,9 @@ class App(tk.Tk):
         self._logq.put(f"Loaded {self._block.file_type} '{self._block.name}': "
                        f"{len(self._block.segments)} segment(s), {self._block.total_size} bytes")
 
+    def on_detect(self):
+        self._run(self._do_detect)
+
     def on_info(self):
         self._run(self._do_info)
 
@@ -308,6 +313,7 @@ class App(tk.Tk):
         self._abort.clear()
         self.btn_flash.configure(state="disabled")
         self.btn_info.configure(state="disabled")
+        self.btn_detect.configure(state="disabled")
         self.btn_abort.configure(state="normal")
         self._worker = threading.Thread(target=self._wrap, args=(fn,), daemon=True)
         self._worker.start()
@@ -321,6 +327,27 @@ class App(tk.Tk):
             self._logq.put(f"UNEXPECTED: {e!r}")
         finally:
             self._logq.put("__DONE__")
+
+    def _do_detect(self):
+        from . import autodetect
+        t = self.var_transport.get()
+        if t == "Simulator":
+            sim = SimulatorTransport(sec_key=_int(self.var_seckey.get(), 0xFFFF),
+                                     log=self._logq.put)
+            found = autodetect.autodetect_sim(sim, log=self._logq.put)
+        elif t.startswith("CAN"):
+            found = autodetect.autodetect_can(
+                bustype=self.var_can_bustype.get(), channel=self.var_can_channel.get(),
+                is_fd=self.var_can_fd.get(), bitrate=_int(self.var_can_bitrate.get(), 500000),
+                data_bitrate=_int(self.var_can_dbitrate.get(), 2000000), log=self._logq.put)
+        else:
+            self._logq.put("Autodetect is for CAN/Simulator; DoIP uses vehicle discovery.")
+            return
+        if found:
+            f = found[0]
+            w = 8 if f.extended else 3
+            self._logq.put(f"Using ECU 0x{f.ecu_addr:02X}: setting CAN request/response IDs.")
+            self._logq.put(f"__SETID__0x{f.req_id:0{w}X},0x{f.phys_resp_id:0{w}X}")
 
     def _do_info(self):
         t = self._make_transport()
@@ -359,7 +386,12 @@ class App(tk.Tk):
                 if msg == "__DONE__":
                     self.btn_flash.configure(state="normal")
                     self.btn_info.configure(state="normal")
+                    self.btn_detect.configure(state="normal")
                     self.btn_abort.configure(state="disabled")
+                elif msg.startswith("__SETID__"):
+                    req, resp = msg[9:].split(",")
+                    self.var_can_req.set(req)
+                    self.var_can_resp.set(resp)
                 elif msg.startswith("__PROG__"):
                     pct = int(msg[8:])
                     self.progress["value"] = pct

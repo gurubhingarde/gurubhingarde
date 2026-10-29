@@ -26,8 +26,10 @@ NRC = {
 class SimulatorTransport(Transport):
     name = "Simulator (no hardware)"
 
-    def __init__(self, sec_key: int = 0xFFFF, memory_size: int = 0, log=print):
+    def __init__(self, sec_key: int = 0xFFFF, memory_size: int = 0, log=print,
+                 ecu_addr: int = 0x01):
         self.sec_key = sec_key
+        self.ecu_addr = ecu_addr
         self._log = log
         self.session = 0x01
         self.unlocked = False

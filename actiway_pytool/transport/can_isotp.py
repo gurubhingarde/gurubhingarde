@@ -20,7 +20,7 @@ class CanIsoTpTransport(Transport):
                  req_id: int = 0x18DA10F9, resp_id: int = 0x18DAF910,
                  is_fd: bool = True, bitrate: int = 500000,
                  data_bitrate: int = 2000000, extended_id: bool = True,
-                 padding: int = 0xAA, log=print):
+                 padding: int = 0xFF, log=print):  # 0xFF padding, matching the supplier tool
         self.channel = channel
         self.bustype = bustype
         self.req_id = req_id
