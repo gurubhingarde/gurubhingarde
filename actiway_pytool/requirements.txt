@@ -1,0 +1,14 @@
+# Core GUI + engine need NOTHING beyond the Python standard library + Tkinter.
+# (On Linux install Tkinter with:  sudo apt install python3-tk)
+#
+# Everything below is OPTIONAL and only needed for specific features:
+
+# Real CAN / CAN-FD hardware (ISO-TP transport)
+python-can>=4.3.0
+can-isotp>=2.0.0
+
+# AES encrypt/decrypt helpers (crypto.aes_*). Without it, AES features are disabled.
+pycryptodome>=3.20.0
+
+# LZO firmware compression (the original 'LZO' option). Falls back to uncompressed.
+python-lzo>=1.15
