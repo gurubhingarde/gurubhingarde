@@ -34,6 +34,21 @@ def main(argv):
         print("python-can not installed. Run: pip install python-can")
         return 1
 
+    # environment report: Python bitness + whether PCANBasic.dll loads
+    import ctypes
+    import platform
+    import struct
+    bits = struct.calcsize("P") * 8
+    print(f"Python {platform.python_version()} ({bits}-bit) on {platform.system()}")
+    print(f"  -> needs a {bits}-bit PCANBasic.dll (install PEAK 'Device Driver "
+          f"Setup for Windows'; do NOT copy the supplier tool's 32-bit DLL here)")
+    try:
+        ctypes.CDLL("PCANBasic.dll" if platform.system() == "Windows" else "libpcanbasic.so")
+        print("  PCANBasic.dll: FOUND and loadable\n")
+    except Exception as e:
+        print(f"  PCANBasic.dll: NOT loadable -> {e}")
+        print("     Install/repair the PEAK driver package, then re-run.\n")
+
     channels = argv[1:] or CHANNELS
     from actiway_pytool.transport.can_isotp import pcan_fd_params
 
