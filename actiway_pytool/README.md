@@ -26,9 +26,19 @@ AES, LZO) are in `requirements.txt`.
 1. **Transport tab** — pick `Simulator` (default), `CAN / CAN-FD`, or `DoIP`,
    and fill in the matching connection fields.
 2. **Flash tab** — `Browse...` a firmware file (segments appear in the table),
-   choose a preset/zone, set `SecKey` etc.
+   then pick a **Mapping**. Selecting a mapping auto-fills its **Sec Key**,
+   **Zone** and **address range** — exactly like the supplier CHActi-ToolSet.
+   The image is clipped to that mapping's address window before flashing.
 3. Click **Read ECU Info** or **Flash**. The log streams every UDS frame live;
    the progress bar tracks TransferData.
+
+### Mappings (full supplier list)
+All 18 mappings (Multic-SX / Multic-S / IRB-STD3X / IRB-STD3 / CSG / Power33S /
+ACH-PowersC / ACH-LCC …) are loaded from **`data/presets.xml`** — the same file
+format the original tool uses (`Actiway_DownLoad_Tool.xml`). Each mapping holds
+its own zone, address range, min block sizes, optional SHA-256 region and
+optional `<seckey>`. **Edit `data/presets.xml` to add or change mappings** — no
+code change needed. Zones come from `data/zones.xml` (`Actiway_Zones_Config.xml`).
 
 ## Headless use (no display / scripting / CI)
 

@@ -36,6 +36,9 @@ class App(tk.Tk):
         self._worker: threading.Thread | None = None
         self._abort = threading.Event()
         self._block: firmware.ReprogrammingBlock | None = None
+        self._presets = config.load_presets()
+        self._zones = config.load_zones()
+        self._mapping: config.Preset | None = self._presets[0] if self._presets else None
 
         self._build()
         self.after(60, self._drain_log)
@@ -72,6 +75,9 @@ class App(tk.Tk):
         self.log.pack(side="left", fill="both", expand=True)
         ys.pack(side="right", fill="y")
 
+        # apply the first mapping so Sec Key / Zone / range are populated at start
+        self._on_mapping()
+
     def _build_transport_tab(self, nb):
         tab = ttk.Frame(nb); nb.add(tab, text="Transport")
         self.var_transport = tk.StringVar(value="Simulator")
@@ -104,10 +110,10 @@ class App(tk.Tk):
             .grid(row=0, column=2, padx=10)
 
         # DoIP params
-        self.var_doip_host = tk.StringVar(value="192.168.1.100")
+        self.var_doip_host = tk.StringVar(value="169.254.172.12")
         self.var_doip_port = tk.StringVar(value="13400")
-        self.var_doip_sa = tk.StringVar(value="0x0E80")
-        self.var_doip_ta = tk.StringVar(value="0x1000")
+        self.var_doip_sa = tk.StringVar(value="0x0E00")   # TE / tester source addr
+        self.var_doip_ta = tk.StringVar(value="0x0060")   # ECU logical address
         self.doip_frame = ttk.LabelFrame(tab, text="DoIP")
         self.doip_frame.grid(row=2, column=0, columnspan=4, sticky="we", padx=6, pady=6)
         rows = [("ECU host/IP", self.var_doip_host), ("Port", self.var_doip_port),
@@ -125,19 +131,27 @@ class App(tk.Tk):
         ttk.Entry(tab, textvariable=self.var_file, width=58).grid(row=0, column=1, sticky="we")
         ttk.Button(tab, text="Browse...", command=self.on_browse).grid(row=0, column=2, padx=4)
 
-        # preset
-        self.var_preset = tk.StringVar(value=config.PRESETS[0].desc)
-        ttk.Label(tab, text="Preset:").grid(row=1, column=0, sticky="w", padx=6)
-        ttk.Combobox(tab, textvariable=self.var_preset, state="readonly", width=40,
-                     values=[p.desc for p in config.PRESETS])\
-            .grid(row=1, column=1, sticky="w", pady=4)
+        # mapping (selecting one auto-fills Sec Key + Zone + address range)
+        self.var_mapping = tk.StringVar(
+            value=self._presets[0].desc if self._presets else "")
+        ttk.Label(tab, text="Mapping:").grid(row=1, column=0, sticky="w", padx=6)
+        cbm = ttk.Combobox(tab, textvariable=self.var_mapping, state="readonly", width=40,
+                           values=[p.desc for p in self._presets])
+        cbm.grid(row=1, column=1, sticky="w", pady=4)
+        cbm.bind("<<ComboboxSelected>>", self._on_mapping)
 
-        # zone
-        self.var_zone = tk.StringVar(value=config.ZONES[0].name)
+        # zone (auto-set from mapping, but selectable)
+        self.var_zone = tk.StringVar(value=self._zones[0].name if self._zones else "")
         ttk.Label(tab, text="Zone:").grid(row=2, column=0, sticky="w", padx=6)
         ttk.Combobox(tab, textvariable=self.var_zone, state="readonly", width=40,
-                     values=[f"{z.index}: {z.name}" for z in config.ZONES])\
+                     values=[z.name for z in self._zones])\
             .grid(row=2, column=1, sticky="w", pady=4)
+
+        # address range (auto-filled from mapping, read-only display)
+        self.var_range = tk.StringVar(value="")
+        ttk.Label(tab, text="Range:").grid(row=2, column=2, sticky="w", padx=6)
+        ttk.Label(tab, textvariable=self.var_range, foreground="#246")\
+            .grid(row=2, column=2, sticky="w", padx=(54, 0))
 
         # config grid
         cf = ttk.LabelFrame(tab, text="Download config (from original *.exe.config)")
@@ -168,6 +182,30 @@ class App(tk.Tk):
         self.seg_tree.pack(fill="both", expand=True)
         tab.columnconfigure(1, weight=1)
         tab.rowconfigure(4, weight=1)
+
+    def _on_mapping(self, *_):
+        """Supplier-tool behaviour: selecting a mapping fills Sec Key, Zone,
+        address range and min block sizes from that mapping's config."""
+        desc = self.var_mapping.get()
+        preset = next((p for p in self._presets if p.desc == desc), None)
+        if preset is None:
+            return
+        self._mapping = preset
+        # Sec Key: the mapping's own <seckey>, else the config default
+        self.var_seckey.set(f"0x{preset.effective_seckey:X}")
+        # Zone: match by value
+        z = config.zone_by_value(self._zones, preset.zone)
+        if z is not None:
+            self.var_zone.set(z.name)
+        # Address range + min sizes
+        self.var_range.set(f"0x{preset.start:08X} .. 0x{preset.end:08X}")
+        self._logq.put(
+            f"Mapping '{preset.desc}': zone={preset.zone} "
+            f"SecKey=0x{preset.effective_seckey:X} "
+            f"range=0x{preset.start:08X}-0x{preset.end:08X} "
+            f"minCAN=0x{preset.min_can:X} minDoIP=0x{preset.min_doip:X}"
+            + (f" SHA256@0x{preset.sha256_start:08X}/{preset.sha256_length}"
+               if preset.sha256_start is not None else ""))
 
     def _build_crypto_tab(self, nb):
         tab = ttk.Frame(nb); nb.add(tab, text="Crypto / Checksum")
@@ -203,10 +241,15 @@ class App(tk.Tk):
                                  xorout=_int(self.var_crc_xor.get(), 0xFFFFFFFF))
         aes = crypto.AesConfig(passphrase=self.var_aes_pass.get(),
                                mode=self.var_aes_mode.get())
+        m = self._mapping
         return FlashConfig(sec_key=_int(self.var_seckey.get(), 0xFFFF),
                            programming_session=_int(self.var_session.get(), 0x02),
                            addr_len=_int(self.var_addrlen.get(), 4),
                            size_len=_int(self.var_sizelen.get(), 4),
+                           min_block_size_can=m.min_can if m else 0x10,
+                           min_block_size_doip=m.min_doip if m else 0x400,
+                           addr_start=m.start if m else 0,
+                           addr_end=m.end if m else 0,
                            use_lzo=self.var_lzo.get(), crc=crc, aes=aes)
 
     def _make_transport(self):

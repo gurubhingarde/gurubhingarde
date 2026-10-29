@@ -49,6 +49,8 @@ class FlashConfig:
     use_lzo: bool = False
     min_block_size_can: int = 0x10
     min_block_size_doip: int = 0x400
+    addr_start: int = 0              # mapping range; 0/0 means "use file addresses"
+    addr_end: int = 0
     crc: crypto.Crc32Config = None
     aes: crypto.AesConfig = None
 
@@ -134,6 +136,18 @@ class FlashSequencer:
 
     def run(self, block: ReprogrammingBlock) -> str:
         c, cfg = self.c, self.cfg
+        # Clip the image to the selected mapping's address range, like the
+        # supplier tool (prevents flashing outside the zone window).
+        if cfg.addr_end > cfg.addr_start:
+            from .firmware import filter_range
+            before = block.total_size
+            block = filter_range(block, cfg.addr_start, cfg.addr_end)
+            if block.total_size != before:
+                c.log(f"clipped image to mapping range "
+                      f"0x{cfg.addr_start:08X}-0x{cfg.addr_end:08X}: "
+                      f"{before} -> {block.total_size} bytes")
+            if block.total_size == 0:
+                raise UdsError(SID_REQUEST_DOWNLOAD, 0x31)  # requestOutOfRange
         c.log(f"=== Flashing '{block.name}' ({block.total_size} bytes, "
               f"{len(block.segments)} segment(s)) ===")
 
