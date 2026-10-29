@@ -126,24 +126,38 @@ def crc32_hex(data: bytes, cfg: Crc32Config = Crc32Config()) -> str:
 # UDS SecurityAccess seed -> key
 # (original: ACTIA.clDownloadApp.u16Main_eSecKey_Calcul, 16-bit, uses u16SecKey)
 # ---------------------------------------------------------------------------
-# The original is a short reversible 16-bit mix keyed by `sec_key` (config
-# `SecKey`, default 0xFFFF) using 0x1F/0x0F shift/mask constants. The exact mix
-# needs the full method body to be bit-exact; this is a plausible, configurable
-# default. Override `seed_to_key` for your ECU.
-def seed_to_key_u16(seed: int, sec_key: int = 0xFFFF) -> int:
-    """Default 16-bit seed->key. CALIBRATE against the real ECU."""
-    seed &= 0xFFFF
-    sec_key &= 0xFFFF
-    key = seed ^ sec_key
-    # rotate-left by 5 within 16 bits, then mix (placeholder structure matching
-    # the 0x1F / 0x0F constants seen in the original IL)
-    key = ((key << 5) | (key >> 11)) & 0xFFFF
-    key = (key + ((sec_key & 0x1F) << 8) + (sec_key & 0x0F)) & 0xFFFF
-    return key
+# EXACT reconstruction of ACTIA.clDownloadApp.u16Main_eSecKey_Calcul, decoded
+# byte-for-byte from the CDownload.dll IL:
+#
+#   acc = SecKey (u16);  w = seed (u16)
+#   for i in range(15):                 # loop count 15 (blt.s i < 15)
+#       acc = (acc ^ w) & 0xFFFF
+#       w   = rotl16(w, 1 + arg2)       # arg2 = 2 at both call sites -> rotl by 3
+#   return acc
+#
+# i.e. key = SecKey XOR seed XOR rotl3(seed) XOR rotl3^2(seed) XOR ... (15 terms).
+# `arg2` and `rounds` are exposed only so the exact constants are visible/tunable;
+# the recovered values (arg2=2, rounds=15) are the defaults.
+SEED_ROT_ARG = 2     # arg2 passed by the original at both call sites
+SEED_ROUNDS = 15     # loop iterations in the original
+
+
+def seed_to_key_u16(seed: int, sec_key: int = 0xFFFF,
+                    arg2: int = SEED_ROT_ARG, rounds: int = SEED_ROUNDS) -> int:
+    """Exact 16-bit seed->key from u16Main_eSecKey_Calcul."""
+    acc = sec_key & 0xFFFF
+    w = seed & 0xFFFF
+    lshift = (1 + arg2) & 0x1F
+    rshift = (15 - arg2) & 0x1F
+    for _ in range(rounds):
+        acc = (acc ^ w) & 0xFFFF
+        w = ((w << lshift) | (w >> rshift)) & 0xFFFF
+    return acc
 
 
 def seed_to_key_bytes(seed: bytes, sec_key: int = 0xFFFF, width: int = 2) -> bytes:
-    """Generic adapter: treat the first `width` seed bytes as a big-endian int."""
+    """Adapter: the original reads the 2 seed bytes big-endian (resp[2]<<8 | resp[3])
+    and sends the key big-endian. For a >2-byte seed, the low 2 bytes are used."""
     s = int.from_bytes(seed[:width], "big") if seed else 0
     k = seed_to_key_u16(s, sec_key)
     return k.to_bytes(width, "big")

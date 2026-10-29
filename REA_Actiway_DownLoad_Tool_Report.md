@@ -127,15 +127,25 @@ the entitlement blob is AES‑protected).
 - `frmMain.Sign` / `SignCheck` — signs/verifies byte buffers (image provenance
   / download‑package integrity).
 
-### 4.5 UDS SecurityAccess seed→key — `u16Main_eSecKey_Calcul(seed, …)`
-Small 50‑byte‑IL routine over the `u16SecKey` field (config `SecKey`, default
-`0xFFFF`). It is a 16‑bit seed→key transform using bit operations with the
-`0x1F`/`0x0F` (31/15) shift/mask constants visible in the IL — i.e. a classic
-rotate‑and‑mix keyed by `u16SecKey`. `u16DLDll_iCrcInc_Exe` provides an
-incremental CRC over `tu16DLDll_iCRCTable`.
-*(The exact polynomial of the mix is recoverable from the 50‑byte body if a
-bit‑accurate reimplementation is needed — ask and I can trace it instruction by
-instruction.)*
+### 4.5 UDS SecurityAccess seed→key — `u16Main_eSecKey_Calcul(seed, arg2)` — FULLY DECODED
+50‑byte‑IL routine, decoded byte‑for‑byte from `CDownload.dll`:
+
+```
+acc = this.u16SecKey          ; config SecKey (default 0xFFFF)
+w   = seed                    ; 16-bit seed from the ECU
+for i in range(15):           ; blt.s  i < 15
+    acc = (acc ^ w) & 0xFFFF
+    w   = rotl16(w, 1 + arg2) ; arg2 = 2 at BOTH call sites -> rotate-left by 3
+return acc                    ; 16-bit key
+```
+
+Equivalently: **`key = SecKey ⊕ seed ⊕ rotl3(seed) ⊕ rotl3²(seed) ⊕ … ⊕ rotl3¹⁴(seed)`**
+(15 XORed rotations). The seed is read from the SecurityAccess positive response
+big‑endian: `seed = (resp[2] << 8) | resp[3]` (field `tu8Response`, read with
+`ldelem.u1`). The key is sent back big‑endian. Both call sites
+(`s32StartReadINFO`, `vDLDll_iExecute_Thread`) pass `arg2 = 2`.
+This is implemented exactly in `actiway_pytool/crypto.py: seed_to_key_u16`.
+`u16DLDll_iCrcInc_Exe` provides an incremental CRC over `tu16DLDll_iCRCTable`.
 
 ### 4.6 Image checksum — `CRC_32`
 Standard table‑driven **CRC‑32** (`GetCRC32Table`, `Crc32Table[256]`, formatted
