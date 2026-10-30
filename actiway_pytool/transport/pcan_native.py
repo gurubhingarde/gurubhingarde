@@ -132,6 +132,33 @@ class PcanNativeTransport(Transport):
                         "and run pcan_native_probe.py to check FD capability. If another "
                         "program owns the channel, close it first.")
             raise TransportError(f"PCAN init failed (0x{st:X}: {txt}). {hint}")
+        # Hardware acceptance filter: only queue the ECU's response ID. On a busy
+        # J1939 bus this stops the RX queue overflowing (and dropping responses)
+        # while we spend seconds sending a large TransferData block.
+        self.set_filter(self.resp_id, self.resp_id)
+
+    def set_filter(self, from_id: int, to_id: int):
+        """Restrict hardware reception to [from_id, to_id]; None/0 range opens it."""
+        if self._api is None:
+            return
+        h = P.TPCANHandle(self.handle)
+        mode = P.PCAN_MODE_EXTENDED if self.extended else P.PCAN_MODE_STANDARD
+        try:
+            self._api.SetValue(h, P.PCAN_MESSAGE_FILTER, P.PCAN_FILTER_CLOSE)
+            self._api.FilterMessages(h, from_id, to_id, mode)
+            self.log(f"[pcan] RX filter -> 0x{from_id:X}")
+        except Exception as e:
+            self.log(f"[pcan] filter note: {e}")
+
+    def open_filter(self):
+        """Open the hardware filter to receive all IDs (used by autodetect)."""
+        if self._api is None:
+            return
+        try:
+            self._api.SetValue(P.TPCANHandle(self.handle),
+                               P.PCAN_MESSAGE_FILTER, P.PCAN_FILTER_OPEN)
+        except Exception:
+            pass
 
     def close(self):
         if self._api is not None:
@@ -299,6 +326,7 @@ class PcanNativeTransport(Transport):
         Returns list of (resp_id, extended, data)."""
         found = {}
         orig_ext = self.extended
+        self.open_filter()                    # receive all IDs during discovery
         sf = bytes([len(payload)]) + payload
         for pid, ext in probes:
             self.extended = ext
