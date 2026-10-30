@@ -42,6 +42,36 @@ class Found:
                 f"[{self.first_data.hex(' ').upper()}]")
 
 
+def is_session_response(cid: int, extended: bool, data: bytes) -> bool:
+    """True only for a genuine UDS response to our 10 xx probe, addressed to the
+    tester (0xF9). Filters out live J1939 / normal bus broadcast traffic."""
+    if extended:
+        if (cid & 0xFFFF0000) != 0x18DA0000:
+            return False
+        if ((cid >> 8) & 0xFF) != TESTER_SA:     # destination must be our tester
+            return False
+    else:
+        if not (0x7E8 <= cid <= 0x7EF):
+            return False
+    if not data:
+        return False
+    pci = data[0] >> 4
+    if pci == 0:                                 # single frame
+        n = data[0] & 0x0F
+        uds = data[1:1 + n]
+    elif pci == 1:                               # first frame
+        uds = data[2:]
+    else:
+        return False
+    if not uds:
+        return False
+    if uds[0] == 0x50:                           # positive response to 0x10
+        return True
+    if uds[0] == 0x7F and len(uds) > 1 and uds[1] == 0x10:   # negative to 0x10
+        return True
+    return False
+
+
 def _derive(resp_id: int, extended: bool) -> tuple[int, int, int]:
     """Return (ecu_addr, physical_req_id, physical_resp_id) from a responder ID."""
     if extended:
@@ -94,8 +124,10 @@ def autodetect_can(bustype: str, channel: str, is_fd: bool = True,
                 if rx is None or rx.arbitration_id == probe_id:
                     continue
                 data = bytes(rx.data)
-                # accept a positive (50 02) or any UDS response to our probe
                 if rx.arbitration_id in found:
+                    continue
+                # ignore live bus / J1939 traffic; keep only real UDS responses
+                if not is_session_response(rx.arbitration_id, rx.is_extended_id, data):
                     continue
                 ecu, req, presp = _derive(rx.arbitration_id, rx.is_extended_id)
                 f = Found(rx.arbitration_id, rx.is_extended_id, ecu, req, presp, data)

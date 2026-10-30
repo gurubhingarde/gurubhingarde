@@ -348,7 +348,8 @@ class App(tk.Tk):
         elif t.startswith("PCAN"):
             tp = self._make_transport()
             with tp:
-                raw = tp.raw_probe(autodetect.PROBES, autodetect.PROBE_PAYLOAD)
+                raw = tp.raw_probe(autodetect.PROBES, autodetect.PROBE_PAYLOAD,
+                                   validator=autodetect.is_session_response)
             found = []
             for resp_id, ext, data in raw:
                 ecu, req, presp = autodetect._derive(resp_id, ext)
@@ -372,7 +373,13 @@ class App(tk.Tk):
         t = self._make_transport()
         with t:
             c = UdsClient(t, log=self._logq.put)
-            c.diagnostic_session(0x03)
+            # try extended then default session; read DIDs regardless
+            for sess in (0x03, 0x01):
+                try:
+                    c.diagnostic_session(sess)
+                    break
+                except Exception as e:
+                    self._logq.put(f"session 0x{sess:02X} not available: {e}")
             for did, name in config.INFO_DIDS.items():
                 try:
                     val = c.read_did(did)

@@ -292,9 +292,11 @@ class PcanNativeTransport(Transport):
         raise TransportError(f"ISO-TP: unexpected PCI 0x{data[0]:02X}")
 
     # -- autodetect ---------------------------------------------------------
-    def raw_probe(self, probes, payload: bytes, listen: float = 0.3):
+    def raw_probe(self, probes, payload: bytes, listen: float = 0.5, validator=None):
         """Send `payload` (ISO-TP single frame) to each (id, extended) in probes
-        and collect responders. Returns list of (resp_id, extended, data)."""
+        and collect genuine responders. `validator(cid, extended, data)` decides
+        what counts as a real response (to ignore live bus / J1939 traffic).
+        Returns list of (resp_id, extended, data)."""
         found = {}
         orig_ext = self.extended
         sf = bytes([len(payload)]) + payload
@@ -311,8 +313,12 @@ class PcanNativeTransport(Transport):
                                     accept=lambda cid: cid != pid)
                 if r is None:
                     break
-                if r[0] not in found:
-                    found[r[0]] = (r[0], ext, r[1])
-                    self.log(f"[autodetect] <- 0x{r[0]:X} {r[1].hex(' ').upper()}")
+                cid, data = r
+                if cid in found:
+                    continue
+                if validator is None or validator(cid, ext, data):
+                    found[cid] = (cid, ext, data)
+                    self.log(f"[autodetect] ECU response <- 0x{cid:X} "
+                             f"{data.hex(' ').upper()}")
         self.extended = orig_ext
         return list(found.values())
