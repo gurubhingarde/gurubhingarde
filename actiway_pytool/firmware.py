@@ -128,6 +128,30 @@ def _coalesce(chunks: dict[int, int]) -> list[Segment]:
     return segs
 
 
+def parse_actia_banner(data: bytes) -> str:
+    """Decode an ACTIA Multic DID banner (SID 22 response payload after the DID).
+
+    Layout (66 bytes): tag(1) version(3) partno(10) name(20) vendor(10)
+    date(12) time(10), each string NUL-padded. Returns a one-line summary;
+    falls back to a hex/ascii dump for anything that doesn't fit the layout.
+    """
+    def s(b):
+        return b.split(b"\x00", 1)[0].decode("latin1", "replace").strip()
+
+    if len(data) >= 66 and data[0] == 0x42:
+        ver = ".".join(str(x) for x in data[1:4])
+        part = s(data[4:14])
+        name = s(data[14:34])
+        vendor = s(data[34:44])
+        date = s(data[44:56])
+        tm = s(data[56:66])
+        return f"{name}  part={part}  v{ver}  {vendor}  {date} {tm}".strip()
+    if all(b == 0xFF for b in data):
+        return "(not programmed)"
+    txt = "".join(chr(c) if 32 <= c < 127 else "." for c in data)
+    return f"{data.hex(' ').upper()}  |{txt}|"
+
+
 def load_firmware(path: str) -> ReprogrammingBlock:
     """Auto-detect S-record vs Intel HEX vs raw binary from `path`."""
     with open(path, "rb") as f:

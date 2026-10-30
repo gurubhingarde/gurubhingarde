@@ -383,7 +383,7 @@ class App(tk.Tk):
             for did, name in config.INFO_DIDS.items():
                 try:
                     val = c.read_did(did)
-                    self._logq.put(f"  {did:04X} {name}: {val!r}")
+                    self._logq.put(f"  {did:04X} {name}: {firmware.parse_actia_banner(val)}")
                 except Exception as e:
                     self._logq.put(f"  {did:04X} {name}: {e}")
 
