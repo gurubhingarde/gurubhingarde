@@ -311,6 +311,16 @@ class App(tk.Tk):
     def on_flash(self):
         if not self._block:
             messagebox.showwarning("No firmware", "Load a firmware file first."); return
+        if self.var_transport.get() != "Simulator":
+            if not messagebox.askyesno(
+                    "Flash real ECU?",
+                    "This will ERASE and reprogram the ECU.\n\n"
+                    "• Some routine IDs / fingerprint bytes are not yet confirmed from a "
+                    "real CAN trace, so a flash may fail mid-way.\n"
+                    "• A failed flash can leave the module unbootable.\n"
+                    "• Prefer a bench setup with the correct firmware and recovery path.\n\n"
+                    "Proceed anyway?"):
+                return
         self._run(self._do_flash)
 
     def on_abort(self):
@@ -398,10 +408,14 @@ class App(tk.Tk):
         with t:
             c = UdsClient(t, log=self._logq.put)
             seq = FlashSequencer(c, cfg, progress=prog)
-            for i, s in enumerate(list(self._block.segments)):
-                if self._abort.is_set():
-                    self._logq.put("aborted before completion"); return
-            digest = seq.run(self._block)
+            if self._abort.is_set():
+                self._logq.put("aborted before start"); return
+            # ACTIA two-phase flow (app -> boot -> erase -> download), unless the
+            # Simulator is selected (it models a plain UDS server).
+            if self.var_transport.get() == "Simulator":
+                digest = seq.run(self._block)
+            else:
+                digest = seq.run_actia(self._block)
             self._logq.put(f"FLASH COMPLETE — image CRC-32 = {digest}")
 
     # ---- log pump ---------------------------------------------------------
