@@ -43,7 +43,9 @@ class FlashConfig:
     """Mirrors the original *.exe.config keys."""
     sec_key: int = 0xFFFF
     programming_session: int = SESSION_PROGRAMMING
-    security_level: int = 0x01       # SecurityAccess subfunction (requestSeed)
+    security_level: int = 0x01       # SecurityAccess subfunction for the Simulator
+    security_seed_sub: int = 0x03    # CONFIRMED from IL: requestSeed level 3 (27 03)
+    security_key_sub: int = 0x04     # CONFIRMED from IL: sendKey level 4 (27 04)
     seed_width: int = 2
     addr_len: int = 4                # bytes for address in RequestDownload
     size_len: int = 4                # bytes for size in RequestDownload
@@ -57,7 +59,7 @@ class FlashConfig:
     dtc_control_off: int = 0x85       # ControlDTCSetting
     comm_control: int = 0x28          # CommunicationControl
     comm_control_sub: int = 0x03      # disableRxAndTx
-    comm_control_param: int = 0x01    # normalCommunicationMessages
+    comm_control_param: int = 0x03    # CONFIRMED from IL: 28 03 03
     jump_to_boot_reset_sub: int = 0x02   # ECUReset keyOffOnReset (CONFIRMED: 11 02 -> 51 02)
     diag_version_did: int = 0xF1F0    # "get diag version" DID (CONFIRMED from IL: 22 F1 F0)
     fingerprint_did: int = 0xF183     # fingerprint DID (CONFIRMED from IL: 2E F1 83 ...)
@@ -108,16 +110,18 @@ class UdsClient:
         resp = self.request(bytes([SID_READ_DID, (did >> 8) & 0xFF, did & 0xFF]))
         return resp[3:]
 
-    def security_access(self, cfg: FlashConfig) -> None:
-        sub = cfg.security_level
-        resp = self.request(bytes([SID_SECURITY, sub]))
+    def security_access(self, cfg: FlashConfig, seed_sub: int | None = None,
+                        key_sub: int | None = None) -> None:
+        seed_sub = cfg.security_level if seed_sub is None else seed_sub
+        key_sub = (seed_sub + 1) if key_sub is None else key_sub
+        resp = self.request(bytes([SID_SECURITY, seed_sub]))
         seed = resp[2:]
         if not any(seed):
             self.log("security: seed already unlocked (all-zero)")
             return
         key = crypto.seed_to_key_bytes(seed, cfg.sec_key, cfg.seed_width)
         self.log(f"security: seed={seed.hex().upper()} -> key={key.hex().upper()}")
-        self.request(bytes([SID_SECURITY, sub + 1]) + key)
+        self.request(bytes([SID_SECURITY, key_sub]) + key)
 
     def request_download(self, addr: int, size: int, cfg: FlashConfig) -> int:
         alf = (cfg.size_len << 4) | cfg.addr_len
@@ -232,24 +236,26 @@ class FlashSequencer:
         c.diagnostic_session(SESSION_EXTENDED)
         c.log("2) ControlDTCSetting off")
         c.request(bytes([cfg.dtc_control_off, 0x02]))
-        c.log("3) CommunicationControl (disable normal msgs)")
+        c.log("3) CommunicationControl (28 03 03)")
         c.request(bytes([cfg.comm_control, cfg.comm_control_sub, cfg.comm_control_param]))
         c.log("4) Programming session (application)")
         c.diagnostic_session(cfg.programming_session)
-        c.log("5) Security access (application)")
-        c.security_access(cfg)
+        c.log("5) Security access level 3 (27 03/04)")
+        c.security_access(cfg, cfg.security_seed_sub, cfg.security_key_sub)
 
-        # --- Phase 2: jump to boot, re-auth ---
-        c.log("6) Jump to boot (ECU reset into bootloader)")
+        # --- Phase 2: jump to boot (reconnect), re-auth in bootloader ---
+        c.log("6) Jump to boot (reconnect)")
         try:
-            c.ecu_reset(cfg.jump_to_boot_reset_sub)
-        except (UdsError, TransportError) as e:
-            c.log(f"   jump-to-boot note: {e}")
-        time.sleep(1.2)                      # boot startup window (log shows ~1.2 s)
+            self.c.t.close()
+            time.sleep(0.8)
+            self.c.t.open()
+        except Exception as e:
+            c.log(f"   reconnect note: {e}")
+        time.sleep(0.5)
         c.log("7) Programming session (bootloader)")
         c.diagnostic_session(cfg.programming_session)
-        c.log("8) Security access (bootloader)")
-        c.security_access(cfg)
+        c.log("8) Security access level 3 (bootloader)")
+        c.security_access(cfg, cfg.security_seed_sub, cfg.security_key_sub)
 
         c.log("9) Get diag version")
         try:
