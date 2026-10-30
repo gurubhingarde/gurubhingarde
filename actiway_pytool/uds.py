@@ -6,6 +6,8 @@ ordered reprogramming sequence the original tool runs.
 """
 from __future__ import annotations
 
+import datetime
+import time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -242,7 +244,6 @@ class FlashSequencer:
             c.ecu_reset(cfg.jump_to_boot_reset_sub)
         except (UdsError, TransportError) as e:
             c.log(f"   jump-to-boot note: {e}")
-        import time
         time.sleep(1.2)                      # boot startup window (log shows ~1.2 s)
         c.log("7) Programming session (bootloader)")
         c.diagnostic_session(cfg.programming_session)
