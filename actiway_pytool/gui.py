@@ -92,10 +92,10 @@ class App(tk.Tk):
         # CAN params
         self.var_can_bustype = tk.StringVar(value="pcan")
         self.var_can_channel = tk.StringVar(value="PCAN_USBBUS1")
-        self.var_can_fd = tk.BooleanVar(value=True)
+        self.var_can_fd = tk.BooleanVar(value=False)          # this ECU is classic CAN
         self.var_can_req = tk.StringVar(value="0x18DA00F9")   # set by Autodetect
         self.var_can_resp = tk.StringVar(value="0x18DAF900")  # set by Autodetect
-        self.var_can_bitrate = tk.StringVar(value="500000")
+        self.var_can_bitrate = tk.StringVar(value="250000")   # 250 kbit/s classic
         self.var_can_dbitrate = tk.StringVar(value="2000000")
 
         self.can_frame = ttk.LabelFrame(tab, text="CAN / CAN-FD")
