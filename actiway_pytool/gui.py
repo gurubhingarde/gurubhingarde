@@ -82,11 +82,11 @@ class App(tk.Tk):
 
     def _build_transport_tab(self, nb):
         tab = ttk.Frame(nb); nb.add(tab, text="Transport")
-        self.var_transport = tk.StringVar(value="Simulator")
+        self.var_transport = tk.StringVar(value="PCAN native (PCANBasic.dll)")
         ttk.Label(tab, text="Transport:").grid(row=0, column=0, sticky="w", padx=6, pady=6)
         cb = ttk.Combobox(tab, textvariable=self.var_transport, state="readonly",
-                          values=["Simulator", "PCAN native (PCANBasic.dll)",
-                                  "CAN / CAN-FD", "DoIP"])
+                          values=["PCAN native (PCANBasic.dll)", "Simulator",
+                                  "CAN via python-can (Vector/Kvaser/SocketCAN)", "DoIP"])
         cb.grid(row=0, column=1, sticky="w"); cb.bind("<<ComboboxSelected>>", self._sync)
 
         # CAN params
