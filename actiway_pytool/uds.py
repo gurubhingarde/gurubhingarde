@@ -80,7 +80,7 @@ class FlashConfig:
 
 class UdsClient:
     def __init__(self, transport: Transport, log: Callable[[str], None] = print,
-                 timeout: float = 3.0):
+                 timeout: float = 5.0):
         self.t = transport
         self.log = log
         self.timeout = timeout
@@ -134,8 +134,8 @@ class UdsClient:
         self.log(f"request_download ok, maxBlockLength={max_block}")
         return max_block
 
-    def transfer_data(self, seq: int, chunk: bytes) -> bytes:
-        return self.request(bytes([SID_TRANSFER_DATA, seq & 0xFF]) + chunk)
+    def transfer_data(self, seq: int, chunk: bytes, timeout: float | None = None) -> bytes:
+        return self.request(bytes([SID_TRANSFER_DATA, seq & 0xFF]) + chunk, timeout)
 
     def transfer_exit(self) -> bytes:
         return self.request(bytes([SID_TRANSFER_EXIT]))
@@ -312,7 +312,7 @@ class FlashSequencer:
             payload = max(1, (max_block or 0x402) - 2)
             seq = 1
             for off in range(0, len(data), payload):
-                c.transfer_data(seq, data[off:off + payload])
+                c.transfer_data(seq, data[off:off + payload], timeout=20.0)
                 seq = (seq % 0xFF) + 1
                 done += min(payload, len(data) - off)
                 self.progress(done, total)
