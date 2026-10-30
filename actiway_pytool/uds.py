@@ -56,10 +56,11 @@ class FlashConfig:
     comm_control: int = 0x28          # CommunicationControl
     comm_control_sub: int = 0x03      # disableRxAndTx
     comm_control_param: int = 0x01    # normalCommunicationMessages
-    jump_to_boot_reset_sub: int = 0x02   # ECUReset sub for "jump to boot" (uncertain)
-    diag_version_did: int = 0xF1AA    # "get diag version" DID (uncertain)
-    fingerprint_did: int = 0xF15A     # programming fingerprint DID (uncertain)
-    erase_routine: int = 0xFF00       # eraseMemory routine id (ISO default)
+    jump_to_boot_reset_sub: int = 0x02   # ECUReset keyOffOnReset (CONFIRMED: 11 02 -> 51 02)
+    diag_version_did: int = 0xF1F0    # "get diag version" DID (CONFIRMED from IL: 22 F1 F0)
+    fingerprint_did: int = 0xF183     # fingerprint DID (CONFIRMED from IL: 2E F1 83 ...)
+    erase_routine: int = 0xFF00       # eraseMemory routine id (CONFIRMED from IL: 31 01 FF 00)
+    erase_alfid: int = 0x44           # addr/len format byte for erase params (CALIBRATE)
     checksum_routine: int = 0xFF01    # check/verify routine id (uncertain)
     crc: crypto.Crc32Config = None
     aes: crypto.AesConfig = None
@@ -266,8 +267,11 @@ class FlashSequencer:
 
         # --- Phase 3: erase ---
         c.log("11) Launch erase memory (routine start)")
-        erase_params = (cfg.addr_start.to_bytes(4, "big") +
-                        (cfg.addr_end - cfg.addr_start + 1).to_bytes(4, "big"))
+        # eraseMemory params: [ALFID][address][length] (same format as 0x34).
+        # Exact format is computed at runtime in the original; CALIBRATE if NRC.
+        size = cfg.addr_end - cfg.addr_start + 1
+        erase_params = (bytes([cfg.erase_alfid]) +
+                        cfg.addr_start.to_bytes(4, "big") + size.to_bytes(4, "big"))
         c.routine_control(0x01, cfg.erase_routine, erase_params)
         c.log("12) Wait erase (poll routine result)")
         for _ in range(60):
