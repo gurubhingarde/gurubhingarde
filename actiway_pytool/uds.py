@@ -59,9 +59,10 @@ class FlashConfig:
     jump_to_boot_reset_sub: int = 0x02   # ECUReset keyOffOnReset (CONFIRMED: 11 02 -> 51 02)
     diag_version_did: int = 0xF1F0    # "get diag version" DID (CONFIRMED from IL: 22 F1 F0)
     fingerprint_did: int = 0xF183     # fingerprint DID (CONFIRMED from IL: 2E F1 83 ...)
-    erase_routine: int = 0xFF00       # eraseMemory routine id (CONFIRMED from IL: 31 01 FF 00)
-    erase_alfid: int = 0x44           # addr/len format byte for erase params (CALIBRATE)
-    checksum_routine: int = 0xFF01    # check/verify routine id (uncertain)
+    erase_routine: int = 0xFF00       # eraseMemory routine id (CONFIRMED: 31 01 FF 00 <zone>)
+    checksum_routine: int = 0xFF01    # check-CRC routine (CONFIRMED: 31 01 FF 01 <crc16>)
+    zone: int = 0                     # memory zone byte for erase (from mapping)
+    crc16_init: int = 0xFFFF          # CRC-16/CCITT init (CALIBRATE)
     crc: crypto.Crc32Config = None
     aes: crypto.AesConfig = None
 
@@ -255,10 +256,9 @@ class FlashSequencer:
             c.log(f"   diag-version note: {e}")
 
         c.log("10) Write fingerprint")
-        import datetime
-        fp = datetime.date.today().strftime("%y%m%d")
-        fp_bytes = bytes(int(fp[i:i + 2], 16) if fp[i:i + 2].isdigit() else 0
-                         for i in range(0, 6, 2))
+        # CONFIRMED from IL: 2E F1 83 <year_hi> <year_lo> <month> <day>
+        now = datetime.datetime.now()
+        fp_bytes = bytes([(now.year >> 8) & 0xFF, now.year & 0xFF, now.month, now.day])
         try:
             c.request(bytes([0x2E, (cfg.fingerprint_did >> 8) & 0xFF,
                              cfg.fingerprint_did & 0xFF]) + fp_bytes)
@@ -266,18 +266,14 @@ class FlashSequencer:
             c.log(f"   fingerprint note: {e}")
 
         # --- Phase 3: erase ---
-        c.log("11) Launch erase memory (routine start)")
-        # eraseMemory params: [ALFID][address][length] (same format as 0x34).
-        # Exact format is computed at runtime in the original; CALIBRATE if NRC.
-        size = cfg.addr_end - cfg.addr_start + 1
-        erase_params = (bytes([cfg.erase_alfid]) +
-                        cfg.addr_start.to_bytes(4, "big") + size.to_bytes(4, "big"))
-        c.routine_control(0x01, cfg.erase_routine, erase_params)
+        c.log(f"11) Launch erase memory (zone {cfg.zone})")
+        # CONFIRMED from IL: 31 01 FF 00 <zone byte>
+        c.routine_control(0x01, cfg.erase_routine, bytes([cfg.zone & 0xFF]))
         c.log("12) Wait erase (poll routine result)")
-        for _ in range(60):
+        for _ in range(120):
             try:
-                r = c.routine_control(0x03, cfg.erase_routine)
-                if r and r[-1] in (0x00,):   # routineStatus = finished
+                r = c.routine_control(0x03, cfg.erase_routine, bytes([cfg.zone & 0xFF]))
+                if r and r[-1] == 0x00:       # routineStatus finished
                     break
             except UdsError:
                 pass
@@ -290,8 +286,10 @@ class FlashSequencer:
               f"{(cfg.min_block_size_doip or 0x400):X} page alignment")
         total = sum(b.size for b in blocks)
         done = 0
+        crc_stream = bytearray()
         for seg in blocks:
             data = seg.data
+            crc_stream += data
             if cfg.use_lzo:
                 try:
                     from . import lzo
@@ -312,13 +310,14 @@ class FlashSequencer:
 
         # --- Phase 5: verify + reset ---
         c.log("16) Check CRC (routine)")
-        image = b"".join(s.data for s in block.segments)
-        digest = crypto.crc32_hex(image, cfg.crc)
+        # CONFIRMED from IL: 31 01 FF 01 <crc16 big-endian>, u16 CRC-16/CCITT
+        crc16 = crypto.crc16_ccitt(bytes(crc_stream), cfg.crc16_init)
         try:
-            c.routine_control(0x01, cfg.checksum_routine, bytes.fromhex(digest))
+            c.routine_control(0x01, cfg.checksum_routine, crc16.to_bytes(2, "big"))
         except (UdsError, TransportError) as e:
             c.log(f"   CRC-routine note: {e}")
-        c.log(f"   image CRC-32 = {digest}")
+        c.log(f"   image CRC-16 = {crc16:04X}")
+        digest = f"{crc16:04X}"
 
         c.log("17) ECU reset")
         try:

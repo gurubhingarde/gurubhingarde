@@ -253,6 +253,7 @@ class App(tk.Tk):
                            min_block_size_doip=m.min_doip if m else 0x400,
                            addr_start=m.start if m else 0,
                            addr_end=m.end if m else 0,
+                           zone=m.zone if m else 0,
                            use_lzo=self.var_lzo.get(), crc=crc, aes=aes)
 
     def _make_transport(self):

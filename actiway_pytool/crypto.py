@@ -123,6 +123,36 @@ def crc32_hex(data: bytes, cfg: Crc32Config = Crc32Config()) -> str:
 
 
 # ---------------------------------------------------------------------------
+# CRC-16 (original: ACTIA.clDownloadApp.u16DLDll_iCrcInc_Exe + tu16DLDll_iCRCTable)
+# ---------------------------------------------------------------------------
+# The flash "Check CRC" routine sends a 16-bit CRC. The IL is the classic
+# table-driven, MSB-first form:  crc = (crc<<8) ^ table[((crc>>8) ^ byte) & 0xFF]
+# which is CRC-16/CCITT (poly 0x1021). init is configurable (0xFFFF default);
+# CALIBRATE init/poly against the ECU if the Check-CRC step is rejected.
+def crc16_ccitt(data: bytes, init: int = 0xFFFF, poly: int = 0x1021) -> int:
+    crc = init & 0xFFFF
+    for b in data:
+        crc = ((crc << 8) & 0xFFFF) ^ _crc16_table(poly)[((crc >> 8) ^ b) & 0xFF]
+    return crc & 0xFFFF
+
+
+_CRC16_CACHE: dict[int, list[int]] = {}
+
+
+def _crc16_table(poly: int) -> list[int]:
+    t = _CRC16_CACHE.get(poly)
+    if t is None:
+        t = []
+        for i in range(256):
+            c = i << 8
+            for _ in range(8):
+                c = ((c << 1) ^ poly) & 0xFFFF if (c & 0x8000) else (c << 1) & 0xFFFF
+            t.append(c)
+        _CRC16_CACHE[poly] = t
+    return t
+
+
+# ---------------------------------------------------------------------------
 # UDS SecurityAccess seed -> key
 # (original: ACTIA.clDownloadApp.u16Main_eSecKey_Calcul, 16-bit, uses u16SecKey)
 # ---------------------------------------------------------------------------
