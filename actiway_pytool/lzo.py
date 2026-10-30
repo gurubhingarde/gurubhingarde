@@ -21,8 +21,14 @@ def available() -> bool:
 def compress(data: bytes) -> bytes:
     if not _HAVE:
         raise RuntimeError("python-lzo not installed: pip install python-lzo")
-    # header=False to match raw LZO1X stream (adjust if your ECU expects a header)
-    return _lzo.compress(data, 9, False)
+    # python-lzo's compress signature varies by version/build; try the richest
+    # form first, then fall back. header=False = raw LZO1X stream.
+    for args in ((data, 9, False), (data, 9), (data,)):
+        try:
+            return _lzo.compress(*args)
+        except TypeError:
+            continue
+    return _lzo.compress(data)
 
 
 def decompress(data: bytes, out_len: int) -> bytes:
