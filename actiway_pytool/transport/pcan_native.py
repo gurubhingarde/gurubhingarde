@@ -31,6 +31,17 @@ except Exception:  # pragma: no cover - needs PEAK wrapper + DLL
     except Exception:
         _HAVE = False
 
+# PEAK's message-type constants are c_ubyte instances, not ints. Coerce once so
+# bitwise ops work ("int & c_ubyte" raises TypeError).
+if _HAVE:
+    def _ci(x):
+        return x.value if hasattr(x, "value") else int(x)
+    _MT_STD = _ci(P.PCAN_MESSAGE_STANDARD)
+    _MT_EXT = _ci(P.PCAN_MESSAGE_EXTENDED)
+    _MT_FD = _ci(P.PCAN_MESSAGE_FD)
+    _MT_BRS = _ci(P.PCAN_MESSAGE_BRS)
+    _MT_STATUS = _ci(P.PCAN_MESSAGE_STATUS)
+
 # Channel name -> handle
 _CHANNELS = {f"PCAN_USBBUS{i}": 0x50 + i if i <= 8 else 0x500 + i for i in range(1, 17)}
 for _i in range(1, 9):
@@ -138,9 +149,9 @@ class PcanNativeTransport(Transport):
 
     # -- raw frame layer ----------------------------------------------------
     def _msgtype(self):
-        t = P.PCAN_MESSAGE_EXTENDED if self.extended else P.PCAN_MESSAGE_STANDARD
+        t = _MT_EXT if self.extended else _MT_STD
         if self.is_fd:
-            t |= P.PCAN_MESSAGE_FD | P.PCAN_MESSAGE_BRS
+            t |= _MT_FD | _MT_BRS
         return t
 
     def send_frame(self, can_id: int, data: bytes):
@@ -177,7 +188,7 @@ class PcanNativeTransport(Transport):
             else:
                 st, msg, _ = self._api.Read(P.TPCANHandle(self.handle))
             if st == P.PCAN_ERROR_OK:
-                if getattr(msg, "MSGTYPE", 0) & P.PCAN_MESSAGE_STATUS:
+                if _ci(getattr(msg, "MSGTYPE", 0)) & _MT_STATUS:
                     continue
                 n = _dlc2len(msg.DLC) if self.is_fd else msg.LEN
                 data = bytes(msg.DATA[i] for i in range(n))
