@@ -279,10 +279,14 @@ class FlashSequencer:
                 pass
             time.sleep(0.5)
 
-        # --- Phase 4: download each segment ---
-        total = block.total_size
+        # --- Phase 4: download each page-aligned block (matches supplier) ---
+        from .firmware import build_download_blocks
+        blocks = build_download_blocks(block, align=cfg.min_block_size_doip or 0x400)
+        c.log(f"   {len(blocks)} download block(s) after 0x"
+              f"{(cfg.min_block_size_doip or 0x400):X} page alignment")
+        total = sum(b.size for b in blocks)
         done = 0
-        for seg in block.segments:
+        for seg in blocks:
             data = seg.data
             if cfg.use_lzo:
                 try:

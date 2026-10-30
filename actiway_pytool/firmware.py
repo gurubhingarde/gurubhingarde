@@ -172,6 +172,46 @@ def load_firmware(path: str) -> ReprogrammingBlock:
     return ReprogrammingBlock(name=name, file_name=name, file_type=ftype, segments=segs)
 
 
+def build_download_blocks(block: ReprogrammingBlock, align: int = 0x400,
+                          pad: int = 0xFF) -> list[Segment]:
+    """Merge raw segments into page-aligned download blocks, matching the
+    supplier tool (FileConverter.MegreData): each segment is widened to `align`
+    page boundaries, overlapping/adjacent pages are merged, and interior gaps
+    (and the alignment padding) are filled with `pad`.
+
+    Returns one Segment per RequestDownload. Verified against EA_V1_00.Mot to
+    reproduce the supplier's 4 download blocks exactly.
+    """
+    if not block.segments:
+        return []
+    # 1) page-align each segment's [start, end]
+    spans = []
+    for s in block.segments:
+        lo = s.start_addr - (s.start_addr % align)
+        hi = s.end_addr + (align - 1 - (s.end_addr % align))
+        spans.append((lo, hi, s))
+    spans.sort(key=lambda x: x[0])
+
+    # 2) merge overlapping / adjacent aligned spans
+    blocks: list[list] = []
+    for lo, hi, s in spans:
+        if blocks and lo <= blocks[-1][1] + 1:
+            blocks[-1][1] = max(blocks[-1][1], hi)
+            blocks[-1][2].append(s)
+        else:
+            blocks.append([lo, hi, [s]])
+
+    # 3) materialise each block, pad-filled, with real segment bytes placed in
+    out: list[Segment] = []
+    for lo, hi, segs in blocks:
+        buf = bytearray([pad]) * (hi - lo + 1)
+        for s in segs:
+            off = s.start_addr - lo
+            buf[off:off + len(s.data)] = s.data
+        out.append(Segment(lo, bytes(buf)))
+    return out
+
+
 def filter_range(block: ReprogrammingBlock, start: int, end: int) -> ReprogrammingBlock:
     """Clip a block's segments to [start, end] (inclusive) if end > start."""
     if end <= start:
