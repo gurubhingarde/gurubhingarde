@@ -302,6 +302,22 @@ class App(tk.Tk):
                                                      f"0x{s.end_addr:08X}", f"{s.size}"))
         self._logq.put(f"Loaded {self._block.file_type} '{self._block.name}': "
                        f"{len(self._block.segments)} segment(s), {self._block.total_size} bytes")
+        # Auto-select the mapping whose address window contains this image so
+        # EA/WIRING/EW each target the correct zone + Sec Key without manual
+        # picking (and we never silently flash into the wrong zone).
+        if self._block.segments:
+            lo = min(s.start_addr for s in self._block.segments)
+            hi = max(s.end_addr for s in self._block.segments)
+            match = config.preset_for_range(self._presets, lo, hi)
+            if match is not None:
+                self.var_mapping.set(match.desc)
+                self._on_mapping()
+                self._logq.put(f"Auto-selected mapping '{match.desc}' "
+                               f"(image 0x{lo:08X}-0x{hi:08X} fits its range)")
+            else:
+                self._logq.put(f"WARNING: no mapping range contains image "
+                               f"0x{lo:08X}-0x{hi:08X} — pick the mapping "
+                               f"manually before flashing.")
 
     def on_detect(self):
         self._run(self._do_detect)

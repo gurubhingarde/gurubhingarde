@@ -53,6 +53,20 @@ class Preset:
         return DEFAULT_SECKEY if self.seckey is None else self.seckey
 
 
+def preset_for_range(presets: "list[Preset]", lo: int, hi: int) -> "Preset | None":
+    """Return the tightest mapping whose [start, end] window fully contains the
+    image span [lo, hi]. Used to auto-target the right zone (EA/WIRING/EW/...)
+    from a loaded firmware's addresses: a smaller matching window beats a larger
+    one, so an EW image (0x18480000-0x18FFFFF7) picks the EW mapping rather than
+    the all-encompassing APP_ALL+BSP. Returns None if no window contains it."""
+    best = None
+    for p in presets:
+        if p.end > p.start and p.start <= lo and hi <= p.end:
+            if best is None or (p.end - p.start) < (best.end - best.start):
+                best = p
+    return best
+
+
 def _text_int(node, tag, default=None):
     el = node.find(tag)
     if el is None or el.text is None or not el.text.strip():
