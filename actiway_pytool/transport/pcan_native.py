@@ -113,9 +113,14 @@ class PcanNativeTransport(Transport):
         if st != P.PCAN_ERROR_OK:
             txt = self._err(st)
             self._api = None
-            raise TransportError(
-                f"PCAN init failed (0x{st:X}: {txt}). Close PCAN-View / the supplier "
-                "tool (channel busy), check the channel name, or toggle CAN-FD.")
+            hint = ("Close PCAN-View / the supplier tool (channel busy), check the "
+                    "channel name, or toggle CAN-FD.")
+            if self.is_fd and st == getattr(P, "PCAN_ERROR_ILLOPERATION", 0x8000000):
+                hint = ("FD init rejected. Your PCAN-USB may be a NON-FD model, or the "
+                        "PCAN driver is too old. Untick CAN-FD to use classic 500k, "
+                        "and run pcan_native_probe.py to check FD capability. If another "
+                        "program owns the channel, close it first.")
+            raise TransportError(f"PCAN init failed (0x{st:X}: {txt}). {hint}")
 
     def close(self):
         if self._api is not None:
