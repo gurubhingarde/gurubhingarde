@@ -54,9 +54,14 @@ python -m actiway_pytool.cli flash fw.s19 --seckey 0xFFFF
   SessionControl, SecurityAccess (seed→key checked with your `SecKey`),
   RequestDownload/TransferData/TransferExit, ECUReset, ReadDataByIdentifier.
   Wrong key → `NRC 0x35`, exactly like an ECU.
-- **CAN/CAN-FD** (`transport/can_isotp.py`) uses `python-can` + `can-isotp`.
-  Set bustype (`pcan`, `vector`, `socketcan`, …), channel, and request/response
-  IDs (default 29-bit `0x18DA10F9` / `0x18DAF910`).
+- **PCAN native** (`transport/pcan_native.py`) talks straight to PEAK's
+  `PCANBasic.dll` via the bundled `PCANBasic.py`, with a built-in ISO-TP layer
+  (classic + CAN-FD). **Recommended for PEAK hardware** — it avoids python-can's
+  PCAN backend quirks and matches how the supplier tool drives the DLL. Needs
+  only the PEAK driver installed (bitness must match your Python).
+- **CAN/CAN-FD** (`transport/can_isotp.py`) uses `python-can` + `can-isotp` for
+  non-PEAK interfaces (Vector, Kvaser, SocketCAN, …). Set bustype, channel, and
+  request/response IDs.
 - **DoIP** (`transport/doip.py`) connects over TCP (ISO 13400), does routing
   activation, then diagnostic messages.
 

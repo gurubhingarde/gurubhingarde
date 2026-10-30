@@ -85,7 +85,8 @@ class App(tk.Tk):
         self.var_transport = tk.StringVar(value="Simulator")
         ttk.Label(tab, text="Transport:").grid(row=0, column=0, sticky="w", padx=6, pady=6)
         cb = ttk.Combobox(tab, textvariable=self.var_transport, state="readonly",
-                          values=["Simulator", "CAN / CAN-FD", "DoIP"])
+                          values=["Simulator", "PCAN native (PCANBasic.dll)",
+                                  "CAN / CAN-FD", "DoIP"])
         cb.grid(row=0, column=1, sticky="w"); cb.bind("<<ComboboxSelected>>", self._sync)
 
         # CAN params
@@ -228,7 +229,7 @@ class App(tk.Tk):
     # ---- helpers ----------------------------------------------------------
     def _sync(self, *_):
         t = self.var_transport.get()
-        state_can = "normal" if t.startswith("CAN") else "disabled"
+        state_can = "normal" if (t.startswith("CAN") or t.startswith("PCAN")) else "disabled"
         state_doip = "normal" if t == "DoIP" else "disabled"
         for w in self.can_frame.winfo_children():
             try: w.configure(state=state_can)
@@ -259,6 +260,15 @@ class App(tk.Tk):
         log = self._logq.put
         if t == "Simulator":
             return SimulatorTransport(sec_key=_int(self.var_seckey.get(), 0xFFFF), log=log)
+        if t.startswith("PCAN"):
+            from .transport.pcan_native import PcanNativeTransport
+            m = self._mapping
+            return PcanNativeTransport(
+                channel=self.var_can_channel.get(), is_fd=self.var_can_fd.get(),
+                bitrate=_int(self.var_can_bitrate.get(), 500000),
+                data_bitrate=_int(self.var_can_dbitrate.get(), 2000000),
+                req_id=_int(self.var_can_req.get()), resp_id=_int(self.var_can_resp.get()),
+                min_size=(m.min_can if (m and self.var_can_fd.get()) else 8), log=log)
         if t.startswith("CAN"):
             from .transport.can_isotp import CanIsoTpTransport
             return CanIsoTpTransport(
@@ -335,6 +345,15 @@ class App(tk.Tk):
             sim = SimulatorTransport(sec_key=_int(self.var_seckey.get(), 0xFFFF),
                                      log=self._logq.put)
             found = autodetect.autodetect_sim(sim, log=self._logq.put)
+        elif t.startswith("PCAN"):
+            tp = self._make_transport()
+            with tp:
+                raw = tp.raw_probe(autodetect.PROBES, autodetect.PROBE_PAYLOAD)
+            found = []
+            for resp_id, ext, data in raw:
+                ecu, req, presp = autodetect._derive(resp_id, ext)
+                found.append(autodetect.Found(resp_id, ext, ecu, req, presp, data))
+                self._logq.put(f"Found: {found[-1]}")
         elif t.startswith("CAN"):
             found = autodetect.autodetect_can(
                 bustype=self.var_can_bustype.get(), channel=self.var_can_channel.get(),
