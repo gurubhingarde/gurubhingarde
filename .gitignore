@@ -1,3 +1,7 @@
 
 # Local build artifact (code lives in actiway_pytool/)
 actiway_pytool.zip
+
+# Python bytecode
+__pycache__/
+*.py[cod]
