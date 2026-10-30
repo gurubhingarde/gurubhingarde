@@ -65,6 +65,7 @@ class FlashConfig:
     checksum_routine: int = 0xFF01    # check-CRC routine (CONFIRMED: 31 01 FF 01 <crc16>)
     zone: int = 0                     # memory zone byte for erase (from mapping)
     crc16_init: int = 0xFFFF          # CRC-16/CCITT init (CALIBRATE)
+    tool_id: bytes = b"720001"        # 6-byte tester ID in the fingerprint (CALIBRATE)
     crc: crypto.Crc32Config = None
     aes: crypto.AesConfig = None
 
@@ -257,9 +258,12 @@ class FlashSequencer:
             c.log(f"   diag-version note: {e}")
 
         c.log("10) Write fingerprint")
-        # CONFIRMED from IL: 2E F1 83 <year_hi> <year_lo> <month> <day>
+        # CONFIRMED from IL (15 bytes): 2E F1 83 <year_hi><year_lo><month><day>
+        #   <hour><minute> <6-byte ToolID>
         now = datetime.datetime.now()
-        fp_bytes = bytes([(now.year >> 8) & 0xFF, now.year & 0xFF, now.month, now.day])
+        tid = (cfg.tool_id + b"\x00" * 6)[:6]
+        fp_bytes = bytes([(now.year >> 8) & 0xFF, now.year & 0xFF, now.month,
+                          now.day, now.hour, now.minute]) + tid
         try:
             c.request(bytes([0x2E, (cfg.fingerprint_did >> 8) & 0xFF,
                              cfg.fingerprint_did & 0xFF]) + fp_bytes)
