@@ -415,9 +415,11 @@ class App(tk.Tk):
             # Simulator is selected (it models a plain UDS server).
             if self.var_transport.get() == "Simulator":
                 digest = seq.run(self._block)
+                crc_label = "CRC-32"
             else:
                 digest = seq.run_actia(self._block)
-            self._logq.put(f"FLASH COMPLETE — image CRC-32 = {digest}")
+                crc_label = "CRC-16"
+            self._logq.put(f"FLASH COMPLETE — image {crc_label} = {digest}")
 
     # ---- log pump ---------------------------------------------------------
     def _drain_log(self):
