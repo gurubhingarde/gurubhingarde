@@ -145,8 +145,11 @@ class PcanNativeTransport(Transport):
         mode = P.PCAN_MODE_EXTENDED if self.extended else P.PCAN_MODE_STANDARD
         try:
             self._api.SetValue(h, P.PCAN_MESSAGE_FILTER, P.PCAN_FILTER_CLOSE)
-            self._api.FilterMessages(h, from_id, to_id, mode)
-            self.log(f"[pcan] RX filter -> 0x{from_id:X}")
+            st = self._api.FilterMessages(h, from_id, to_id, mode)
+            ok = (st == P.PCAN_ERROR_OK)
+            self.log(f"[pcan] RX filter -> 0x{from_id:X}"
+                     + ("" if ok else f"  (WARNING: FilterMessages status 0x{int(st):X} "
+                                      f"-- flood may not be filtered)"))
         except Exception as e:
             self.log(f"[pcan] filter note: {e}")
 
@@ -267,22 +270,44 @@ class PcanNativeTransport(Transport):
                 bs, stmin = self._wait_fc()
                 sent_in_block = 0
 
-    def _wait_fc(self, timeout=1.0):
-        r = self.recv_frame(timeout, accept=lambda cid: cid == self.resp_id)
-        if r is None:
-            raise TransportError("ISO-TP: no Flow Control frame from ECU")
-        data = r[1]
-        if (data[0] & 0xF0) != 0x30:
-            raise TransportError(f"ISO-TP: expected FC, got {data[:1].hex()}")
-        fs = data[0] & 0x0F
-        if fs == 1:                      # wait
-            return self._wait_fc(timeout)
-        if fs == 2:
-            raise TransportError("ISO-TP: ECU flow-control overflow")
-        bs = data[1] if len(data) > 1 else 0
-        stmin_raw = data[2] if len(data) > 2 else 0
-        stmin = (stmin_raw / 1000.0) if stmin_raw <= 0x7F else 0.0001
-        return bs, stmin
+    def _wait_fc(self, timeout=5.0):
+        """Wait for the ECU's ISO-TP Flow Control frame between blocks.
+
+        The ECU can be slow to send FC while it writes the previous block to
+        NVM, so we are patient (default 5 s) and we honour FC.wait (0x31) for as
+        long as the ECU keeps asking. We also count every frame seen while
+        waiting: if the wait times out, the error says whether we saw a flood
+        of frames (hardware filter not holding -> J1939 getting through) or
+        silence (ECU genuinely not answering), which is the key datum for the
+        mid-transfer stall.
+        """
+        deadline = time.time() + timeout
+        seen = 0
+        while time.time() < deadline:
+            r = self.recv_frame(min(0.25, timeout), accept=None)
+            if r is None:
+                continue
+            seen += 1
+            cid, data = r
+            if cid != self.resp_id or not data:
+                continue
+            if (data[0] & 0xF0) != 0x30:     # not a Flow Control frame
+                continue
+            fs = data[0] & 0x0F
+            if fs == 1:                      # wait -> keep waiting, don't reset deadline
+                continue
+            if fs == 2:
+                raise TransportError("ISO-TP: ECU flow-control overflow")
+            bs = data[1] if len(data) > 1 else 0
+            stmin_raw = data[2] if len(data) > 2 else 0
+            stmin = (stmin_raw / 1000.0) if stmin_raw <= 0x7F else 0.0001
+            return bs, stmin
+        raise TransportError(
+            f"ISO-TP: no Flow Control frame from ECU ({timeout:.0f}s, "
+            f"{seen} frame(s) seen while waiting -- "
+            + ("bus flood: HW filter not holding" if seen > 20 else
+               "ECU silent: it stopped answering")
+            + ")")
 
     def recv(self, timeout: float = 2.0) -> bytes:
         r = self.recv_frame(timeout, accept=lambda cid: cid == self.resp_id)
