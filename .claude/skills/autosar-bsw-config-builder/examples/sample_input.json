@@ -1,0 +1,73 @@
+{
+  "item": {
+    "name": "Body Control Module",
+    "abbr": "BCM",
+    "project": "BCM-2026 Platform Refresh",
+    "doc_id": "BSW-CFG-001",
+    "revision": "1.0",
+    "date": "2026-08-20",
+    "author": "BSW Integration Lead",
+    "approver": "ECU Software Manager",
+    "company": "Example Automotive Systems"
+  },
+  "ecu_target": {
+    "microcontroller": "TC397XX",
+    "vendor": "Infineon",
+    "memory_ram_kb": 2048,
+    "memory_rom_kb": 16384
+  },
+  "bus_interfaces": [
+    {"name": "CAN1", "type": "CAN FD", "baudrate": 500000, "channels": 1},
+    {"name": "CAN2", "type": "CAN", "baudrate": 500000, "channels": 1},
+    {"name": "LIN1", "type": "LIN", "baudrate": 19200, "channels": 2}
+  ],
+  "mcal_modules": [
+    {"id": "M001", "name": "Port", "configured_for_target": "Yes"},
+    {"id": "M002", "name": "Dio", "configured_for_target": "Yes"},
+    {"id": "M003", "name": "Adc", "configured_for_target": "Yes"},
+    {"id": "M004", "name": "Pwm", "configured_for_target": "Yes"},
+    {"id": "M005", "name": "Gpt", "configured_for_target": "Yes"},
+    {"id": "M006", "name": "Wdg", "configured_for_target": "Yes"},
+    {"id": "M007", "name": "Spi", "configured_for_target": "Yes"},
+    {"id": "M008", "name": "Can", "configured_for_target": "Yes"}
+  ],
+  "ecu_abstraction": [
+    {"id": "EA001", "name": "EcuM", "depends_on": "Os, Det"},
+    {"id": "EA002", "name": "MemIf", "depends_on": "Fee, Ea"},
+    {"id": "EA003", "name": "Fee", "depends_on": "Fls"}
+  ],
+  "service_layer": [
+    {"id": "SL001", "name": "Com", "critical": true},
+    {"id": "SL002", "name": "PduR", "critical": true},
+    {"id": "SL003", "name": "CanIf", "critical": true},
+    {"id": "SL004", "name": "CanTp", "critical": false},
+    {"id": "SL005", "name": "NvM", "critical": true},
+    {"id": "SL006", "name": "Dem", "critical": true},
+    {"id": "SL007", "name": "Dcm", "critical": false},
+    {"id": "SL008", "name": "Det", "critical": false}
+  ],
+  "complex_drivers": [
+    {"id": "CD001", "name": "CddLightControl", "purpose": "Exterior lighting PWM ramp with sub-millisecond timing"},
+    {"id": "CD002", "name": "CddSeatMotor", "purpose": "H-bridge seat motor control with stall detection"}
+  ],
+  "module_parameters": [
+    {"module_id": "SL001", "parameter": "ComTxModeNumberOfRepetitions", "value": 3, "post_build_variant": "VAR_BASE"},
+    {"module_id": "SL001", "parameter": "ComTxModeTimeOffsetFactor", "value": 10, "post_build_variant": "VAR_BASE"},
+    {"module_id": "SL005", "parameter": "NvMDatasetSelectionBits", "value": 2, "post_build_variant": "VAR_BASE"},
+    {"module_id": "SL003", "parameter": "CanIfPublicTxBuffering", "value": "TRUE", "post_build_variant": "VAR_HIGH"},
+    {"module_id": "M006", "parameter": "WdgTriggerLatency", "value": 5, "post_build_variant": "VAR_BASE"}
+  ],
+  "memory_layout": [
+    {"region": "RAM_BSW", "start_address": "0x70000000", "size_kb": 256, "purpose": "BSW working RAM"},
+    {"region": "RAM_COM", "start_address": "0x70040000", "size_kb": 128, "purpose": "Com signal buffers"},
+    {"region": "FLASH_NVM", "start_address": "0xA0000000", "size_kb": 512, "purpose": "NvM block storage"},
+    {"region": "FLASH_CODE", "start_address": "0xA0080000", "size_kb": 8192, "purpose": "BSW and application code"}
+  ],
+  "os_tasks": [
+    {"id": "T001", "name": "Task_1ms", "period_ms": 1, "priority": 10},
+    {"id": "T002", "name": "Task_5ms", "period_ms": 5, "priority": 8},
+    {"id": "T003", "name": "Task_10ms", "period_ms": 10, "priority": 6},
+    {"id": "T004", "name": "Task_100ms", "period_ms": 100, "priority": 3},
+    {"id": "T005", "name": "Task_Init", "period_ms": 0, "priority": 12}
+  ]
+}

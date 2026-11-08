@@ -1,0 +1,41 @@
+{
+  "item": {
+    "name": "Electronic Stability Control",
+    "abbr": "ESC",
+    "project": "AV Safety Platform",
+    "doc_id": "CSG-ESC-001",
+    "revision": "1.0",
+    "date": "2026-01-15",
+    "author": "Cybersecurity Team",
+    "approver": "Chief Safety Officer"
+  },
+  "target_cal": "CAL 3",
+  "csg_refinements": [
+    {
+      "threat_scenario_id": "THREAT-FW-MOD",
+      "asset": "Firmware Storage",
+      "refined_goal_text": "Prevent unauthorized firmware modification via secure boot bypass or unauthorized update channel",
+      "cal_adjust": "CAL 4"
+    },
+    {
+      "threat_scenario_id": "THREAT-CAN-SPOOF",
+      "asset": "CAN Bus",
+      "refined_goal_text": "Prevent CAN message spoofing on safety-critical brake and steering channels",
+      "cal_adjust": "CAL 3"
+    }
+  ],
+  "csg_overrides": [
+    {
+      "csg_id": "CSG-001",
+      "asset": "Firmware Storage",
+      "property": "Integrity",
+      "owner": "Firmware Lead"
+    },
+    {
+      "csg_id": "CSG-003",
+      "asset": "Calibration Memory",
+      "property": "Integrity",
+      "owner": "Calibration Engineer"
+    }
+  ]
+}

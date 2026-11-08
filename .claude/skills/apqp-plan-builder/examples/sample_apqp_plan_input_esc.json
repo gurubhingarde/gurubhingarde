@@ -1,0 +1,303 @@
+{
+  "program": {
+    "name": "Electronic Stability Control (ESC) Module",
+    "customer": "Phoenix Motors",
+    "oem": "Phoenix Motors",
+    "vehicle_program": "Falcon XLT 2027 Refresh",
+    "model_year": "2027",
+    "part_number": "WS-4521-A",
+    "doc_id": "APQ-ESC-2027-001",
+    "revision": "1.0",
+    "date": "2024-10-15",
+    "program_manager": "James Thompson",
+    "quality_lead": "Sarah Chen",
+    "engineering_lead": "David Martinez",
+    "company": "Advanced Motion Controls Inc.",
+    "sop_date": "2026-06-01",
+    "eop_date": "2032-12-31",
+    "peak_annual_volume": "150000"
+  },
+
+  "team": [
+    {
+      "name": "James Thompson",
+      "role": "Program Manager",
+      "department": "Program Management",
+      "phases_responsible": "P1, P2, P3, P4, P5",
+      "contact": "jthompson@amccontrols.com"
+    },
+    {
+      "name": "Sarah Chen",
+      "role": "Quality Engineer / Quality Lead",
+      "department": "Quality Assurance",
+      "phases_responsible": "P1, P2, P3, P4, P5",
+      "contact": "schen@amccontrols.com"
+    },
+    {
+      "name": "David Martinez",
+      "role": "Design Engineer / Engineering Lead",
+      "department": "Product Engineering",
+      "phases_responsible": "P1, P2, P3",
+      "contact": "dmartinez@amccontrols.com"
+    },
+    {
+      "name": "Michael Rodriguez",
+      "role": "Manufacturing Engineer",
+      "department": "Operations",
+      "phases_responsible": "P2, P3, P4, P5",
+      "contact": "mrodriguez@amccontrols.com"
+    },
+    {
+      "name": "Lisa Johnson",
+      "role": "Supplier Quality Engineer",
+      "department": "Supply Chain",
+      "phases_responsible": "P1, P2, P3, P4, P5",
+      "contact": "ljohnson@amccontrols.com"
+    },
+    {
+      "name": "Kevin Wong",
+      "role": "Test Engineer",
+      "department": "Quality Assurance",
+      "phases_responsible": "P2, P4",
+      "contact": "kwong@amccontrols.com"
+    }
+  ],
+
+  "phase_deliverables_overrides": {},
+
+  "milestones": [
+    {
+      "id": "M01",
+      "name": "Program Kickoff",
+      "phase": "P1",
+      "planned_date": "2024-11-01",
+      "actual_date": "",
+      "predecessors": "",
+      "status": "Open"
+    },
+    {
+      "id": "M02",
+      "name": "Gate 1 Review (Plan and Define)",
+      "phase": "P1",
+      "planned_date": "2024-12-15",
+      "actual_date": "",
+      "predecessors": "M01",
+      "status": "Open"
+    },
+    {
+      "id": "M03",
+      "name": "Design Review 1 (Preliminary Design)",
+      "phase": "P2",
+      "planned_date": "2025-02-01",
+      "actual_date": "",
+      "predecessors": "M02",
+      "status": "Open"
+    },
+    {
+      "id": "M04",
+      "name": "Design Review 3 (Final Design with Prototype)",
+      "phase": "P2",
+      "planned_date": "2025-04-15",
+      "actual_date": "",
+      "predecessors": "M03",
+      "status": "Open"
+    },
+    {
+      "id": "M05",
+      "name": "Gate 2 Review (Design Confirmation)",
+      "phase": "P2",
+      "planned_date": "2025-05-15",
+      "actual_date": "",
+      "predecessors": "M04",
+      "status": "Open"
+    },
+    {
+      "id": "M06",
+      "name": "Process Design Complete",
+      "phase": "P3",
+      "planned_date": "2025-07-01",
+      "actual_date": "",
+      "predecessors": "M05",
+      "status": "Open"
+    },
+    {
+      "id": "M07",
+      "name": "Gate 3 Review (Process Confirmation)",
+      "phase": "P3",
+      "planned_date": "2025-08-15",
+      "actual_date": "",
+      "predecessors": "M06",
+      "status": "Open"
+    },
+    {
+      "id": "M08",
+      "name": "Production Trial Run",
+      "phase": "P4",
+      "planned_date": "2026-01-15",
+      "actual_date": "",
+      "predecessors": "M07",
+      "status": "Open"
+    },
+    {
+      "id": "M09",
+      "name": "PPAP Submission to Customer",
+      "phase": "P4",
+      "planned_date": "2026-02-15",
+      "actual_date": "",
+      "predecessors": "M08",
+      "status": "Open"
+    },
+    {
+      "id": "M10",
+      "name": "Gate 4 Review (Production Readiness)",
+      "phase": "P4",
+      "planned_date": "2026-03-15",
+      "actual_date": "",
+      "predecessors": "M09",
+      "status": "Open"
+    },
+    {
+      "id": "M11",
+      "name": "Start of Production (SOP)",
+      "phase": "P4",
+      "planned_date": "2026-06-01",
+      "actual_date": "",
+      "predecessors": "M10",
+      "status": "Open"
+    },
+    {
+      "id": "M12",
+      "name": "Gate 5 Review (Feedback and Optimization)",
+      "phase": "P5",
+      "planned_date": "2027-06-01",
+      "actual_date": "",
+      "predecessors": "M11",
+      "status": "Open"
+    }
+  ],
+
+  "gate_reviews": [
+    {
+      "id": "G1",
+      "phase_exit": "P1",
+      "planned_date": "2024-12-15",
+      "exit_criteria": "VOC captured, customer requirements defined (drawing CSL/CTQ), preliminary BOM and process flow feasible, design goals and reliability targets set, team roles assigned, APQP schedule agreed",
+      "status": "Open",
+      "notes": "Customer (Phoenix Motors Quality) invited"
+    },
+    {
+      "id": "G2",
+      "phase_exit": "P2",
+      "planned_date": "2025-05-15",
+      "exit_criteria": "DFMEA complete and high-RPN items mitigated, DVP&R plan approved and testing >50% complete, Design Reviews (DR1/DR2/DR3) conclusive with prototype, SC/CC finalized and traced to drawings, supplier APQP cascade complete",
+      "status": "Open",
+      "notes": "Prototype hardware/firmware demonstrated to customer"
+    },
+    {
+      "id": "G3",
+      "phase_exit": "P3",
+      "planned_date": "2025-08-15",
+      "exit_criteria": "Process flow chart and work instructions complete, PFMEA complete with controls defined, characteristics matrix finalized, MSA plan approved, preliminary process capability study plan and sampling strategy defined, pre-launch control plan (reaction plan) approved",
+      "status": "Open",
+      "notes": "Manufacturing readiness assessment by Operations Lead"
+    },
+    {
+      "id": "G4",
+      "phase_exit": "P4",
+      "planned_date": "2026-03-15",
+      "exit_criteria": "Production Trial Run successful at planned rates, Cpk/Ppk >= 1.33 for all SC/CC, SPC charts show stability, PPAP submission accepted by customer, sustained production @ rate demonstrated, quality planning sign-off obtained",
+      "status": "Open",
+      "notes": "PPAP approval letter or confirmation required from Phoenix Motors"
+    },
+    {
+      "id": "G5",
+      "phase_exit": "P5",
+      "planned_date": "2027-06-01",
+      "exit_criteria": "Production stable (no major non-conformances past 90 days), variation trending downward, customer satisfaction metrics at target (on-time delivery >= 98%, quality PPM <= 100), corrective actions closed and effective, lessons learned documented, continuous improvement plan in place",
+      "status": "Open",
+      "notes": "Program close-out and transition to steady-state supply"
+    }
+  ],
+
+  "special_characteristics": [
+    {
+      "id": "SC-001",
+      "characteristic": "PCB Thickness and Dimensions",
+      "type": "SC",
+      "source": "CTQ",
+      "control_method": "CMM, 100% inline automated inspection"
+    },
+    {
+      "id": "SC-002",
+      "characteristic": "Sensor Signal Accuracy",
+      "type": "CC",
+      "source": "CSL",
+      "control_method": "Functional test at temperature extremes, continuous monitoring"
+    },
+    {
+      "id": "SC-003",
+      "characteristic": "System Response Time (<50ms)",
+      "type": "CC",
+      "source": "Regulatory / Safety",
+      "control_method": "Functional test on every unit, histogram tracking, SPC"
+    },
+    {
+      "id": "SC-004",
+      "characteristic": "Component Solder Joint Quality",
+      "type": "SC",
+      "source": "CTQ",
+      "control_method": "X-ray inspection (sample), automated optical inspection (AOI) 100%"
+    }
+  ],
+
+  "risks": [
+    {
+      "id": "R01",
+      "description": "Supplier capacity for high-volume production (150k units/year)",
+      "likelihood": "Medium",
+      "impact": "High",
+      "mitigation": "Early capacity planning, supplier qualification on dual-line production, SOP ramp agreement",
+      "owner": "Lisa Johnson (Supplier Quality)"
+    },
+    {
+      "id": "R02",
+      "description": "Design complexity requiring multiple design iterations or prototype rebuilds",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "mitigation": "Early design reviews (DR1/DR2), in-house prototype validation, simulation (SPICE) before breadboard",
+      "owner": "David Martinez (Engineering Lead)"
+    },
+    {
+      "id": "R03",
+      "description": "Process capability not met during trial run (Cpk < 1.33)",
+      "likelihood": "Low",
+      "impact": "High",
+      "mitigation": "Robust design (DFMEA mitigation), pre-trial run process optimization, backup process parameters defined",
+      "owner": "Michael Rodriguez (Manufacturing)"
+    },
+    {
+      "id": "R04",
+      "description": "Customer requirement changes after Phase 1",
+      "likelihood": "Medium",
+      "impact": "High",
+      "mitigation": "Change control process, impact analysis before approval, CSL/CTQ locked at Gate 1",
+      "owner": "James Thompson (Program Manager)"
+    },
+    {
+      "id": "R05",
+      "description": "Key technical resource turnover (design or quality lead)",
+      "likelihood": "Low",
+      "impact": "High",
+      "mitigation": "Cross-training, backup resource assigned, documentation of design decisions and rationale",
+      "owner": "James Thompson (Program Manager)"
+    },
+    {
+      "id": "R06",
+      "description": "Supply chain delay for long-lead semiconductor components",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "mitigation": "Early supplier orders, long-lead identified at Phase 1, inventory buffer at SOP",
+      "owner": "Lisa Johnson (Supplier Quality)"
+    }
+  ]
+}

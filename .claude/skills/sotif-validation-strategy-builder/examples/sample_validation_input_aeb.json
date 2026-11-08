@@ -1,0 +1,134 @@
+{
+  "system": {
+    "name": "AEB Validation & Verification Strategy",
+    "project": "HV2024",
+    "date": "2026-05-01",
+    "acceptance_criterion": "Residual unintended brake rate < 1e-7 per operating hour"
+  },
+  "acceptance_criteria": [
+    {
+      "sg_id": "SG-01",
+      "criterion": "False brake activation (rear-end collision risk)",
+      "threshold": "1e-7",
+      "unit": "per operating hour"
+    },
+    {
+      "sg_id": "SG-02",
+      "criterion": "Missed brake (forward collision)",
+      "threshold": "5e-8",
+      "unit": "per operating hour"
+    }
+  ],
+  "scenario_coverage": [
+    {
+      "quadrant": "Known Unsafe (mitigated)",
+      "scenario_count": 5,
+      "mileage_target": "10,000 miles",
+      "method": "Real-world + proving ground",
+      "duration": "3 months",
+      "owner": "ODD validation team"
+    },
+    {
+      "quadrant": "Unknown Unsafe (residual)",
+      "scenario_count": 12,
+      "mileage_target": "1,000,000 miles",
+      "method": "Real-world + simulation + field monitoring",
+      "duration": "12 months",
+      "owner": "V&V lead"
+    }
+  ],
+  "real_world_driving": {
+    "cumulative_miles": "1,000,000",
+    "geography": "North America (5 regions)",
+    "weather": "Proportional to ODD (40% wet, 10% glare, 50% nominal)",
+    "time_of_day": "70% day, 20% dusk/dawn, 10% night"
+  },
+  "simulation_plan": [
+    {
+      "source": "NHTSA pre-crash database (46 scenarios)",
+      "scenario_count": 46,
+      "simulators": "CarMaker, IPG",
+      "validation_status": "In progress — 80% complete",
+      "coverage_gap": "Motorcycle scenarios"
+    },
+    {
+      "source": "Custom edge-case library",
+      "scenario_count": 18,
+      "simulators": "CarMaker",
+      "validation_status": "Pending",
+      "coverage_gap": "Low-contrast scenes; construction zones"
+    }
+  ],
+  "proving_ground_tests": [
+    {
+      "test_id": "PG-01",
+      "scenario": "Stationary vehicle on road",
+      "preconditions": "Speed 60 km/h, daytime, dry road",
+      "expected_behavior": "AEB triggers; vehicle stops within 20m",
+      "criteria": "Pass: zero-loss stop ±5m",
+      "status": "Completed",
+      "notes": ""
+    },
+    {
+      "test_id": "PG-02",
+      "scenario": "Motorcycle in adjacent lane (lane change)",
+      "preconditions": "Speed 80 km/h; motorcycle emerging",
+      "expected_behavior": "Camera detection; no false brake",
+      "criteria": "Pass: detection within 2 seconds; no unintended activation",
+      "status": "In progress",
+      "notes": "Tuning camera confidence threshold"
+    }
+  ],
+  "field_monitoring": [
+    {
+      "element": "Brake command rate (spurious activations)",
+      "rate": "10 Hz (all vehicles)",
+      "logic": "Spike detection: >2 sigma above baseline",
+      "threshold": ">5 events per day per vehicle",
+      "action": "Alert fleet manager; flag for deep-dive analysis"
+    },
+    {
+      "element": "Missed collision detection (user reports)",
+      "rate": "Real-time incident reporting",
+      "logic": "Keyword extraction: 'false negative', 'should have braked'",
+      "threshold": ">1 report per 100,000 miles",
+      "action": "Trigger incident review; assess causality"
+    }
+  ],
+  "acceptance_tracking": [
+    {
+      "sg_id": "SG-01",
+      "criterion": "False brake < 1e-7/hr",
+      "target": "1e-7",
+      "evidence": "900,000 miles zero spurious activations",
+      "pct_complete": "90%",
+      "status": "On track"
+    },
+    {
+      "sg_id": "SG-02",
+      "criterion": "Missed brake < 5e-8/hr",
+      "target": "5e-8",
+      "evidence": "850,000 miles; 2 reported near-misses (under investigation)",
+      "pct_complete": "85%",
+      "status": "At risk"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OI-01",
+      "description": "Motorcycle scenario coverage gap in simulation library",
+      "impact": "Unknown Unsafe scenarios for motorcycle presence under-validated",
+      "resolution": "Develop 10 custom motorcycle scenarios; add to library",
+      "date": "2026-06-30",
+      "owner": "Simulation team"
+    },
+    {
+      "id": "OI-02",
+      "description": "Field monitoring telemetry integration incomplete",
+      "impact": "Real-time anomaly detection not yet operational",
+      "resolution": "Deploy cloud pipeline; integrate with alert system",
+      "date": "2026-07-15",
+      "owner": "Fleet operations"
+    }
+  ]
+}

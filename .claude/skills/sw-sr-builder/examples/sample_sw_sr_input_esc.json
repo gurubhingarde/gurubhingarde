@@ -1,0 +1,37 @@
+{
+  "project": {
+    "name": "Electronic Stability Control (ESC) System - Phase 2B",
+    "doc_id": "SW-SR-ESC-2025-01",
+    "revision": "0.1",
+    "date": "2026-04-29",
+    "author": "Safety Engineering Team",
+    "approver": "Chief Safety Officer"
+  },
+  "linked_tsc": "/path/to/TSC_ESC_demo.xlsx",
+  "sw_sr_overrides": [
+    {
+      "parent_sw_tsr": "TSR-001-01-02",
+      "sw_sr_text": "The SW shall sample the wheel speed sensor diagnostic flag signal from the sensor module every 10 milliseconds, buffer the most recent sample in a parity-protected register, and make it available to the debounce filter within the same task cycle.",
+      "allocated_swc": "SWC_WheelSpeedMonitor",
+      "target_detection_time": "10 ms (1 sample period)"
+    },
+    {
+      "parent_sw_tsr": "TSR-001-02-03",
+      "sw_sr_text": "The SW shall accumulate 5 consecutive confirmed wheel speed diagnostic flag readings over a 50 millisecond window to filter transients, then transition the debounce state machine to FAULT_CONFIRMED.",
+      "allocated_swc": "SWC_DebounceFilter",
+      "target_detection_time": "50 ms (5 x 10 ms samples)"
+    },
+    {
+      "parent_sw_tsr": "TSR-002-01-04",
+      "sw_sr_text": "Upon detection of confirmed wheel speed diagnostic fault, the SW shall immediately clear all motor PWM outputs to zero and command the motor to neutral state within 100 milliseconds of fault confirmation, with rollback protection on power loss.",
+      "allocated_swc": "SWC_MotorActuator",
+      "target_detection_time": "100 ms (FRTI budget)"
+    },
+    {
+      "parent_sw_tsr": "TSR-003-01-01",
+      "sw_sr_text": "The watchdog service task shall write the magic sequence (0xAA55) to the independent watchdog kick register every 25 milliseconds, maintaining a 50 millisecond window with 25 millisecond margin before watchdog timeout.",
+      "allocated_swc": "SWC_WatchdogManager",
+      "target_detection_time": "25 ms (task period)"
+    }
+  ]
+}

@@ -1,0 +1,402 @@
+{
+  "project": {
+    "name": "ESC (Electronic Stability Control)",
+    "doc_id": "ESC-CS-ARCH-001",
+    "revision": "0.1",
+    "date": "2025-05-01",
+    "author": "Security Architect",
+    "approver": "Chief Security Officer"
+  },
+  "cs_elements": [
+    {
+      "id": "CS-E-001",
+      "name": "HSM for OTA Signing Keys",
+      "type": "Hardware Security Module",
+      "supplier": "Thales/Gemalto",
+      "part_number": "Luna SCM-05",
+      "certification": "FIPS 140-2 Level 3",
+      "key_length_support": "2048-4096 bits (RSA), P-384 (ECC)",
+      "algorithms": "RSA-OAEP, ECDSA P-384, AES-256, HMAC-SHA384",
+      "node": "OTA Backend (Cloud)",
+      "notes": "Off-board HSM for OTA firmware signing key lifecycle (generation, rotation, destruction)"
+    },
+    {
+      "id": "CS-E-002",
+      "name": "Secure Element (CryptoAuthLib)",
+      "type": "Secure Element",
+      "supplier": "Microchip",
+      "part_number": "ATECC608A",
+      "certification": "ECC Private Key Storage, AES CCM",
+      "key_length_support": "P-256 (256 bits), AES-128",
+      "algorithms": "ECDSA P-256, AES-128 CCM, SHA-256, HMAC",
+      "node": "ECU (Body Controller)",
+      "notes": "On-board secure element for session key derivation, provisioning, attestation"
+    },
+    {
+      "id": "CS-E-003",
+      "name": "SHE (Secure Hardware Extension) in MCU",
+      "type": "Secure Boot ROM",
+      "supplier": "NXP",
+      "part_number": "MPC5777C",
+      "certification": "SHE Key Derivation per AUTOSAR",
+      "key_length_support": "128-bit AES derived keys",
+      "algorithms": "AES-128 ECB, Key derivation, Anti-rollback counter",
+      "node": "ECU (Engine Controller)",
+      "notes": "Immutable bootloader verification, anti-rollback via monotonic counter, SHE-EXTEND for attestation"
+    },
+    {
+      "id": "CS-E-004",
+      "name": "TLS 1.3 Stack (mbed TLS)",
+      "type": "Cryptographic Library",
+      "supplier": "ARM/Mbed",
+      "part_number": "mbedTLS 3.x",
+      "certification": "NIST SP 800-52 Rev 2 compliant",
+      "key_length_support": "AES-256, P-256/P-384 ECC, RSA-2048/4096",
+      "algorithms": "AES-256-GCM, ECDH P-256, ECDSA P-384, SHA-384",
+      "node": "ECU (OTA Receiver), Backend (OTA Server)",
+      "notes": "Mutual TLS 1.3 for OTA download channel, certificate pinning enforced"
+    },
+    {
+      "id": "CS-E-005",
+      "name": "SecOC Implementation (CAN FD)",
+      "type": "Network Security Module",
+      "supplier": "AUTOSAR (vendor-specific)",
+      "part_number": "SecOC AUTOSAR 4.4+",
+      "certification": "ISO 13849-1 Part 5 compliant",
+      "key_length_support": "128-bit AES for CMAC",
+      "algorithms": "CMAC-AES-128, Counter/Timestamp Freshness",
+      "node": "ECU (CAN Nodes)",
+      "notes": "Message-level authentication for safety-critical CAN frames (steering, braking)"
+    },
+    {
+      "id": "CS-E-006",
+      "name": "Debug Port Disable via Secure Boot",
+      "type": "Access Control",
+      "supplier": "ARM TrustZone-M / Vendor",
+      "part_number": "SWD/JTAG Fuse Lock",
+      "certification": "Production-grade tamper protection",
+      "key_length_support": "N/A",
+      "algorithms": "N/A",
+      "node": "All ECUs",
+      "notes": "Production firmware disables JTAG/SWD; one-time unlock via HMAC challenge (24-hour validity)"
+    },
+    {
+      "id": "CS-E-007",
+      "name": "Certificate Authority (PKI)",
+      "type": "Certificate Authority",
+      "supplier": "DigiCert / GlobalSign",
+      "part_number": "Intermediate CA for OTA + TLS Server",
+      "certification": "X.509v3, CA:TRUE constraint",
+      "key_length_support": "RSA-3072 or ECDSA P-384",
+      "algorithms": "SHA-384, RSA-PSS, ECDSA P-384",
+      "node": "OTA Backend (offline for OTA CA, online for TLS)",
+      "notes": "Dual CAs: OTA firmware signing (offline, HSM-backed) and TLS server (online for mutual auth)"
+    }
+  ],
+  "crypto_operations": [
+    {
+      "id": "CRYPTO-001",
+      "algorithm": "RSA-4096",
+      "key_length": "4096 bits",
+      "mode": "PSS (Probabilistic Signature Scheme)",
+      "purpose": "OTA Firmware Image Signing",
+      "key_class": "OTA_ROOT_SIGNING_KEY",
+      "gen_method": "Generated in HSM, never exported",
+      "storage_location": "HSM (Luna SCM-05), Thales-managed",
+      "rotation_policy": "Annual rotation, new cert issued 30 days prior to expiry",
+      "notes": "Long-term key (multi-year lifecycle), used to sign all firmware releases"
+    },
+    {
+      "id": "CRYPTO-002",
+      "algorithm": "AES-256",
+      "key_length": "256 bits",
+      "mode": "GCM (Galois/Counter Mode) with 96-bit nonce",
+      "purpose": "OTA Download Channel Encryption",
+      "key_class": "SESSION_KEY",
+      "gen_method": "Derived via HKDF-SHA256 from TLS 1.3 handshake PRF",
+      "storage_location": "Ephemeral (RAM), zeroized after TLS session close",
+      "rotation_policy": "Per-session (unique per OTA download)",
+      "notes": "AEAD mode provides both confidentiality and integrity; nonce managed by TLS record layer"
+    },
+    {
+      "id": "CRYPTO-003",
+      "algorithm": "ECDH",
+      "key_length": "P-256 (256-bit curves)",
+      "mode": "Key Agreement (NIST SP 800-56A)",
+      "purpose": "TLS 1.3 Session Establishment",
+      "key_class": "EPHEMERAL_KEYSHARE",
+      "gen_method": "Generated fresh per TLS handshake by mbed TLS",
+      "storage_location": "RAM (ephemeral), zeroized after key derivation",
+      "rotation_policy": "Per-connection (every TLS handshake)",
+      "notes": "Perfect Forward Secrecy (PFS) ensured by ephemeral ECDH; no long-term shared secret"
+    },
+    {
+      "id": "CRYPTO-004",
+      "algorithm": "SHA-384",
+      "key_length": "N/A (hash function)",
+      "mode": "N/A",
+      "purpose": "Firmware Integrity Verification, Certificate Hashing",
+      "key_class": "N/A",
+      "gen_method": "N/A",
+      "storage_location": "N/A",
+      "rotation_policy": "N/A (algorithm change requires firmware update)",
+      "notes": "Used in secure boot chain (ROM → Bootloader → App) and TLS 1.3 handshake (PRF)"
+    },
+    {
+      "id": "CRYPTO-005",
+      "algorithm": "CMAC-AES-128",
+      "key_length": "128 bits",
+      "mode": "CMAC (Cipher-based MAC)",
+      "purpose": "CAN Message Authentication (SecOC)",
+      "key_class": "SECOC_MAC_KEY (per ECU)",
+      "gen_method": "Derived via AES-KW key derivation from SecOC root key",
+      "storage_location": "Secure flash partition (encrypted, fused), or Secure Element if supported",
+      "rotation_policy": "Per-firmware version (changed on OTA install)",
+      "notes": "Per-ECU key; MAC appended to CAN FD data field; freshness counter prevents replay"
+    },
+    {
+      "id": "CRYPTO-006",
+      "algorithm": "ECDSA",
+      "key_length": "P-384 (384-bit curve)",
+      "mode": "Deterministic ECDSA (RFC 6979)",
+      "purpose": "TLS Server Certificate Signing (mutual auth), Device Attestation",
+      "key_class": "DEVICE_ATTESTATION_KEY (per-device or per-ECU)",
+      "gen_method": "Generated in Secure Element (ATECC608A) or provisioned at manufacturing",
+      "storage_location": "Secure Element (ATECC608A) or TPM, never extracted",
+      "rotation_policy": "Per-device (same key for device lifetime, signed into certificate)",
+      "notes": "Used for device identity in mutual TLS; private key never leaves Secure Element"
+    }
+  ],
+  "keys": [
+    {
+      "id": "KEY-001",
+      "key_class": "OTA_ROOT_SIGNING_KEY",
+      "purpose": "Sign all OTA firmware releases for ESC ECUs",
+      "gen_method": "HSM key generation (NIST FIPS 186-4 random)",
+      "storage_location": "Luna SCM-05 HSM (Thales managed, offline)",
+      "key_length": "4096 bits",
+      "rotation_policy": "Annual rotation; new key generated 90 days before expiry. Old key archived for 5 years.",
+      "access_control": "Dual-person control: Security Manager + OTA Team Lead (2-of-2 quorum)",
+      "destruction_method": "Cryptographic zeroization via HSM secure erase command; certificate revocation via CRL"
+    },
+    {
+      "id": "KEY-002",
+      "key_class": "SECOC_ROOT_KEY",
+      "purpose": "Derive per-ECU CMAC keys for CAN message authentication (SecOC)",
+      "gen_method": "Generated in HSM or offline KMS; unique per hardware variant",
+      "storage_location": "Encrypted flash partition (AES-256 key encryption key)",
+      "key_length": "256 bits (AES)",
+      "rotation_policy": "Per-firmware version; all ECUs re-keyed on OTA install. Legacy keys archived 12 months.",
+      "access_control": "OTA provisioning team (automated, logged)",
+      "destruction_method": "Overwrite with random data 3x (Gutmann method); audit log signed and timestamped"
+    },
+    {
+      "id": "KEY-003",
+      "key_class": "BOOT_VERIFICATION_KEY",
+      "purpose": "Verify Bootloader signature in ROM (SHE boot process)",
+      "gen_method": "Public key: derived from private key in HSM. Private key held offline.",
+      "storage_location": "Immutable ROM (Secure Boot ROM), fused into MCU at manufacturing",
+      "key_length": "2048 bits (RSA public exponent, modulus)",
+      "rotation_policy": "No rotation (lifetime of hardware platform). Key embedded in ROM; rollover via MCU redesign.",
+      "access_control": "Manufacturing line only (programming fuse via JTAG during production)",
+      "destruction_method": "N/A (key is fused, immutable)"
+    },
+    {
+      "id": "KEY-004",
+      "key_class": "DEVICE_ATTESTATION_KEY",
+      "purpose": "Sign device identity and firmware measurement quotes (attestation)",
+      "gen_method": "Provisioned per-device at manufacturing (generated in Secure Element or offline, imported)",
+      "storage_location": "ATECC608A Secure Element (CryptoAuthLib slot, never extracted)",
+      "key_length": "P-384 (384 bits)",
+      "rotation_policy": "No rotation (per-device for device lifetime). Cert valid ~10 years.",
+      "access_control": "Attestation verifier (OTA backend service) verifies signature via pinned AIK (Attestation Identity Key) cert",
+      "destruction_method": "Secure Element factory reset (rare); key remains in SE unless hardware physically destroyed"
+    },
+    {
+      "id": "KEY-005",
+      "key_class": "TLS_CLIENT_CERT_PRIVATE_KEY",
+      "purpose": "Mutual TLS authentication (device-to-OTA-server)",
+      "gen_method": "CSR generated in Secure Element or HSM; CA signs certificate; private key never leaves device",
+      "storage_location": "Secure Element (ATECC608A) or TPM",
+      "key_length": "P-256 (256 bits)",
+      "rotation_policy": "Annual certificate renewal; private key remains stable (same for device lifetime)",
+      "access_control": "TLS stack (mbed TLS) uses key for TLS handshake only; access controlled by Secure Element",
+      "destruction_method": "Secure Element factory reset (rare); key cannot be extracted or copied"
+    }
+  ],
+  "boot_stages": [
+    {
+      "id": "BOOT-001",
+      "name": "BootROM (OEM-signed)",
+      "measured": "Yes, into PCR-0 (Secure Boot ROM) via SHA-384",
+      "hash_algorithm": "SHA-384",
+      "key_location": "OEM public key (RSA-2048) fused in ROM during manufacturing",
+      "anti_rollback": "Monotonic counter: BootROM version counter incremented on each Bootloader update; ROM rejects older versions",
+      "secure_unlock": "One-time HMAC-SHA256 unlock token (HWID || timestamp); 24-hour validity; backend verifies via PKI",
+      "node": "All ESC ECUs",
+      "notes": "Immutable ROM; cryptographic verification of Bootloader signature before execution"
+    },
+    {
+      "id": "BOOT-002",
+      "name": "Bootloader (OEM-signed, updatable)",
+      "measured": "Yes, into PCR-1 via SHA-384",
+      "hash_algorithm": "SHA-384",
+      "key_location": "Second-stage public key (RSA-2048 or ECDSA P-256) in BootROM",
+      "anti_rollback": "Version counter: stored in secure flash or OTP fuse. Bootloader rejected if version < current.",
+      "secure_unlock": "Debug unlock only via provisioning (manufacturing); production blocks debug by default",
+      "node": "All ESC ECUs",
+      "notes": "Verifies Application signature before boot; measures Application into PCR-2; enforces debug-disable in production"
+    },
+    {
+      "id": "BOOT-003",
+      "name": "Application (OTA-signed, firmware image)",
+      "measured": "Yes, into PCR-2 via SHA-384",
+      "hash_algorithm": "SHA-384",
+      "key_location": "OTA public key (RSA-4096 or ECDSA P-384) provisioned via initial OTA or manufacturing",
+      "anti_rollback": "OTA image version counter: checked by Bootloader. Monotonic counter in secure NVM incremented on successful boot.",
+      "secure_unlock": "N/A (user-facing application, no debug expected in production)",
+      "node": "All ESC ECUs",
+      "notes": "Implements SecOC for CAN, TLS 1.3 for OTA downstream, attestation reporting"
+    }
+  ],
+  "secure_channels": [
+    {
+      "id": "CHAN-001",
+      "source": "ESC ECU",
+      "destination": "OTA Backend (Cloud)",
+      "protocol": "TLS 1.3 over HTTPS (port 443)",
+      "auth_method": "Mutual certificate authentication (device cert + backend server cert)",
+      "encryption_algo": "AES-256-GCM",
+      "integrity_algo": "GCM implicit (GHASH with AES)",
+      "replay_protection": "TLS record sequence number (implicit in TLS 1.3)",
+      "notes": "Primary channel for firmware OTA download. Certificate pinning enforced (issuer cert hash pinned in firmware)."
+    },
+    {
+      "id": "CHAN-002",
+      "source": "Diagnostic Reader (JTAG/SWD during manufacturing only)",
+      "destination": "ESC ECU Debug Port",
+      "protocol": "DAP-Link (Cortex Debug Access Port) with Debug Authentication",
+      "auth_method": "Secure boot enforces debug-disable in production; one-time unlock token only in dev/mfg",
+      "encryption_algo": "N/A (debug port, not encrypted)",
+      "integrity_algo": "N/A",
+      "replay_protection": "N/A",
+      "notes": "Disabled in production firmware. Unlocked only via provisioning challenge-response (HMAC-SHA256)."
+    },
+    {
+      "id": "CHAN-003",
+      "source": "ESC ECU (CAN bus node)",
+      "destination": "Other ECUs (CAN bus, in-vehicle)",
+      "protocol": "CAN-FD with SecOC (AUTOSAR 4.4)",
+      "auth_method": "CMAC-AES-128 over payload, freshness counter",
+      "encryption_algo": "None (SecOC is MAC-only, not encrypted)",
+      "integrity_algo": "CMAC-AES-128",
+      "replay_protection": "Freshness value: monotonic counter (SecOC) per message type",
+      "notes": "Safety-critical messages (steering angle, braking) require SecOC. MAC appended to CAN data; receiver validates."
+    },
+    {
+      "id": "CHAN-004",
+      "source": "ESC ECU",
+      "destination": "OTA Metadata Server",
+      "protocol": "REST over HTTPS (TLS 1.3)",
+      "auth_method": "Device certificate (mutual TLS)",
+      "encryption_algo": "AES-256-GCM",
+      "integrity_algo": "GCM implicit",
+      "replay_protection": "TLS record sequence number",
+      "notes": "Query firmware version, release notes, and attestation verification. Separate certificate pinning from firmware download."
+    }
+  ],
+  "access_control_roles": [
+    {
+      "id": "ROLE-001",
+      "name": "OEM Security Team",
+      "privileges": "HSM key management (rotation, destruction), certificate issuance, OTA deployment approval",
+      "auth_factors": "Multi-factor: PKI certificate + TOTP (time-based OTP) + SMS confirmation",
+      "max_session_duration": "4 hours (HSM session), 8 hours (approval console)",
+      "audit_logging": "All operations logged: timestamp, signer identity, operation type, approval chain",
+      "privilege_escalation": "Escalation requires dual-control: 2-of-3 security officers",
+      "notes": "Access to OTA root signing key; highest privilege level"
+    },
+    {
+      "id": "ROLE-002",
+      "name": "OTA Provisioning Team",
+      "privileges": "Firmware signing (using HSM via approved workflow), OTA deployment to fleet",
+      "auth_factors": "LDAP (internal directory) + WebAuthn/U2F hardware key",
+      "max_session_duration": "8 hours (OTA provisioning console)",
+      "audit_logging": "All firmware sign operations logged; deployment audit trail per ECU/VIN",
+      "privilege_escalation": "Cannot escalate; requires OEM Security Team approval for key rotation",
+      "notes": "No direct HSM access; uses HSM via approved API (e.g., thales_hsm_client wrapper)"
+    },
+    {
+      "id": "ROLE-003",
+      "name": "Manufacturing/Field Service Technician",
+      "privileges": "Read diagnostic data, one-time device unlock (via provisioning), log collection",
+      "auth_factors": "Service badge ID + PIN + Technician certificate (auto-issued, short-lived)",
+      "max_session_duration": "2 hours (diagnostic session), 1 hour (unlock session)",
+      "audit_logging": "All unlock and diagnostic operations logged; linked to technician ID and timestamp",
+      "privilege_escalation": "No escalation (read-only for diagnostics, unlock only via backend approval)",
+      "notes": "Access limited to debugging tools; cannot modify firmware or keys"
+    },
+    {
+      "id": "ROLE-004",
+      "name": "End-User / Vehicle Owner",
+      "privileges": "Initiate OTA (automatic), view update status, perform factory reset (via dealer only)",
+      "auth_factors": "Vehicle unlock (NFC/BLE key fob or owner app)",
+      "max_session_duration": "OTA download timeout (30 minutes max)",
+      "audit_logging": "OTA events logged server-side (version, timestamp, result)",
+      "privilege_escalation": "No escalation possible (no user-facing HSM or key access)",
+      "notes": "No direct control; OTA fully automated by backend; user cannot downgrade firmware"
+    }
+  ],
+  "defense_vectors": [
+    {
+      "attack_vector": "Firmware Injection (OTA hijacking)",
+      "layer1": "Firewall: Destination IP/port pinning to OTA backend; block unauthorized TLS connections",
+      "layer2": "TLS 1.3: Mutual certificate authentication; HSTS enforced; certificate pinning (issuer cert hash)",
+      "layer3": "Secure boot: Bootloader verifies firmware signature (RSA-4096 or ECDSA P-384) before execution",
+      "layer4": "Anti-rollback: Monotonic counter prevents downgrade to older (possibly vulnerable) firmware",
+      "layer5": "Secure storage: Firmware encrypted in flash via XTS-AES (optional); signature verification prevents tampering",
+      "coverage": "Multi-layer (TLS + crypto verification + anti-rollback) ensures injection resistance",
+      "notes": "TARA-4 threat (critical); requires HSM-backed key; annual key rotation"
+    },
+    {
+      "attack_vector": "Debug Port Exploitation (key extraction, code execution)",
+      "layer1": "Physical: Secure MCU packaging (potting, fused case); tamper-evident seals",
+      "layer2": "Port Access: Debug ports (JTAG/SWD) disabled via fuses in production; readable fuse state in Secure Boot ROM",
+      "layer3": "Software: Secure boot enforces debug-disable before loading App; one-time unlock via HMAC challenge (dev/mfg only)",
+      "layer4": "Verification: Bootloader confirms debug-disable state; attestation quotes PCR values (including boot config)",
+      "layer5": "Audit: All debug unlock requests logged; unlock tokens tied to HWID + timestamp",
+      "coverage": "Hardware + software layering; debug fully disabled in production",
+      "notes": "TARA-4 threat; requires secure provisioning at manufacturing and tight access control at service"
+    },
+    {
+      "attack_vector": "CAN Bus Spoofing (forged safety-critical messages)",
+      "layer1": "Firewall: Rate limiting per message type; reject out-of-order messages",
+      "layer2": "Protocol: SecOC (AUTOSAR) enforces CMAC-AES-128 on safety-critical frames; receiver validates MAC + freshness",
+      "layer3": "Key Management: Per-ECU SecOC keys derived from secure root; keys rotated on firmware OTA",
+      "layer4": "Acceptance Criteria: ECU application logic validates message ranges and timing; rejects anomalies",
+      "layer5": "Logging: All SecOC failures logged (bad MAC, replay attempt); triggers diagnostic alert",
+      "coverage": "MAC-based authentication + freshness + acceptance criteria prevents spoofing",
+      "notes": "TARA-3 threat (safety-critical); SecOC mandatory for steering, braking, ESC control"
+    },
+    {
+      "attack_vector": "Side-Channel Attacks (DPA, Electromagnetic Analysis)",
+      "layer1": "Shielding: Faraday cage (metal enclosure) isolates high-power nodes; EMI suppression",
+      "layer2": "Masking: Cryptographic library implements side-channel resistant AES (constant-time, masked multiplications)",
+      "layer3": "Noise: Power supply decoupling (large capacitors); clock jitter injection (if implemented)",
+      "layer4": "Detection: Anomaly detection on power consumption; triggers watchdog reset on detected glitch",
+      "layer5": "Audit: Side-channel test suite (automated DPA resistance validation) runs during secure boot",
+      "coverage": "Hardware + algorithmic defenses; detection as failsafe",
+      "notes": "TARA-3 threat (key extraction risk); HSM-based key storage isolates sensitive ops"
+    },
+    {
+      "attack_vector": "OTA Rollback Attack (downgrade to vulnerable firmware)",
+      "layer1": "Server-side: Minimum firmware version enforced server-side; client version verification in OTA metadata",
+      "layer2": "Transport: OTA metadata signed by OEM (separate signing key from firmware key); TLS 1.3 ensures freshness",
+      "layer3": "Device: Bootloader compares OTA image version against monotonic counter in secure NVM; rejects if version < current",
+      "layer4": "Secure NVM: Version counter stored in OTP fuse or secure flash (encrypted, HMAC-protected); incremented on successful boot",
+      "layer5": "Attestation: Device reports current version + PCR values; server validates via TPM quote verification",
+      "coverage": "Server-side + device-side anti-rollback; monotonic counter as enforcement",
+      "notes": "TARA-3 threat; requires secure NVM and tight boot sequence verification"
+    }
+  ]
+}

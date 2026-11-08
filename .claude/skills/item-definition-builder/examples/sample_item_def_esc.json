@@ -1,0 +1,324 @@
+{
+  "item": {
+    "name": "Electronic Stability Control",
+    "abbr": "ESC",
+    "project": "Project Phoenix — MY2027 Compact SUV",
+    "doc_id": "ITEMDEF-ESC-001",
+    "revision": "0.1",
+    "date": "2026-04-28",
+    "author": "(your name)",
+    "approver": "(approver name)",
+    "company": "(company)"
+  },
+  "scope_description": "ESC is a chassis-control item that maintains lateral stability by selectively applying brake pressure to individual wheels and modulating engine torque when vehicle yaw rate deviates from driver-intended yaw rate. Item includes the ESC ECU, software, internal sensors (yaw / lateral acceleration via IMU, wheel speeds, steering angle via shared sensor) and the hydraulic modulator. Item does NOT include the brake pedal, master cylinder, instrument cluster, or driver-assistance ECUs.",
+  "item_classification": "vehicle subsystem",
+  "distinguishing_notes": "ESC differs from ABS (Anti-lock Braking System) which provides only emergency braking stability. ESC adds yaw moment correction via selective per-wheel braking and engine torque modulation, enabling active stability control during cornering and loss-of-traction events.",
+  "functions": [
+    {
+      "id": "F01",
+      "name": "Yaw stability control",
+      "description": "Compares measured yaw rate with reference yaw rate computed from steering angle and vehicle speed; applies selective brake pressure to individual wheels to correct yaw deviations and restore stability.",
+      "criticality": "high"
+    },
+    {
+      "id": "F02",
+      "name": "Engine torque modulation",
+      "description": "Requests reduction of engine torque via CAN when wheel slip exceeds threshold or yaw correction requires additional deceleration to assist stability recovery.",
+      "criticality": "high"
+    },
+    {
+      "id": "F03",
+      "name": "Driver warning lamp control",
+      "description": "Illuminates ESC warning lamp on the instrument cluster during active intervention or when system fault is detected.",
+      "criticality": "low"
+    },
+    {
+      "id": "F04",
+      "name": "Self-diagnostic monitoring",
+      "description": "Continuously monitors sensor plausibility, actuator response, and system health; reports Diagnostic Trouble Codes (DTCs) and disables intervention on persistent faults.",
+      "criticality": "none"
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "id": "NFR01",
+      "category": "Performance",
+      "requirement": "Yaw rate control response time shall be less than 100 milliseconds from yaw rate deviation detection to brake pressure modulation.",
+      "rationale": "Vehicle response lag at highway speeds (> 100 km/h) must be imperceptible to driver; 100 ms aligns with human reaction time and vehicle dynamics time constants."
+    },
+    {
+      "id": "NFR02",
+      "category": "Performance",
+      "requirement": "Brake pressure modulation accuracy shall be within 5% of commanded pressure across the 0–250 bar range.",
+      "rationale": "Ensures predictable yaw moment authority during intervention; excessive inaccuracy would reduce driver confidence."
+    },
+    {
+      "id": "NFR03",
+      "category": "Environmental",
+      "requirement": "Item shall operate in temperature range -40 to +85 degrees Celsius and humidity 0–95% non-condensing.",
+      "rationale": "Per ISO 16750-2 automotive environmental conditions (extended operating range for underbody-mounted hydraulic components)."
+    },
+    {
+      "id": "NFR04",
+      "category": "Environmental",
+      "requirement": "Item shall meet EMC requirements per ISO 7637-2 (automotive electrical transient immunity) and ISO 11452-3 (RF immunity).",
+      "rationale": "Vehicle electrical architecture includes high-power switching; ESC ECU must tolerate transients and RF emissions."
+    },
+    {
+      "id": "NFR05",
+      "category": "Regulatory",
+      "requirement": "Item shall comply with NHTSA FMVSS 126 (electronic stability control) and EU Regulation 661/2009.",
+      "rationale": "ESC is mandatory in North America and Europe; performance requirements (e.g., yaw moment authority, lane-keeping aid) are specified in these regulations."
+    },
+    {
+      "id": "NFR06",
+      "category": "Market",
+      "requirement": "Item shall be manufacturable and serviceable within cost budget of 150 EUR per unit (material + labor + logistics).",
+      "rationale": "Project volume 250k units/year; cost target drives component selection and design simplicity."
+    },
+    {
+      "id": "NFR07",
+      "category": "Market",
+      "requirement": "Item shall be compatible with both 12V and 24V electrical system architectures (software configurable).",
+      "rationale": "Project covers both passenger SUV (12V) and commercial vehicle variants (24V); single ECU hardware with calibration variant reduces cost."
+    }
+  ],
+  "boundary": {
+    "notes": "ESC ECU and Hydraulic Modulator (HSM) form the core of the ESC item. ESC receives sensor inputs from wheel speed sensors (via ABS module), IMU, and steering angle sensor. ESC outputs commands to the hydraulic modulator (brake pressure), powertrain ECU (torque request), and instrument cluster (warning lamp). The item boundary excludes the brake pedal assembly, master cylinder, brake fluid lines, engine control unit, and instrument cluster display logic.",
+    "in_item": [
+      "ESC ECU (processor, firmware, sensor interfaces)",
+      "Hydraulic Modulator (solenoid valves, control logic)",
+      "IMU (yaw rate and lateral acceleration sensors)",
+      "Wheel speed sensor interfaces (analog signal conditioning)",
+      "Steering angle sensor interface (CAN receiver)"
+    ],
+    "out_item": [
+      "Brake pedal assembly",
+      "Master cylinder",
+      "ABS pump and reservoir",
+      "Brake fluid lines",
+      "Engine control unit (powertrain ECU)",
+      "Instrument cluster and display"
+    ],
+    "adjacent_systems": [
+      "Powertrain ECU (receives engine torque modulation requests)",
+      "Brake System ECU or ABS Module (supervises hydraulic modulator state)",
+      "Steering ECU (provides steering angle input)",
+      "Instrument Cluster (receives warning lamp command)"
+    ]
+  },
+  "external_interfaces": [
+    {
+      "id": "I01",
+      "interface": "Wheel speed sensors (x4, one per wheel)",
+      "counterpart": "Wheel hubs / ABS module",
+      "direction": "In",
+      "data": "Per-wheel rotational speed via dedicated analog lines; 0–20 kHz pulse train",
+      "integrity": "None (analog signal); monitored for signal loss and range violations in self-diagnostics",
+      "notes": "Shared with ABS; ESC samples at 100 Hz via analog-to-digital converter"
+    },
+    {
+      "id": "I02",
+      "interface": "IMU (Inertial Measurement Unit): yaw rate and lateral acceleration",
+      "counterpart": "Integrated IMU sensor module",
+      "direction": "In",
+      "data": "Yaw rate ±200 deg/s, lateral acceleration ±2g at 100 Hz sampling",
+      "integrity": "CRC-16 per message; plausibility check (cross-correlation with wheel speed estimates)",
+      "notes": "Dual-output interface; used by both ESC and other chassis control systems"
+    },
+    {
+      "id": "I03",
+      "interface": "Steering angle sensor",
+      "counterpart": "Steering column sensor / Steering ECU",
+      "direction": "In",
+      "data": "Absolute steering angle ±540 degrees at 1 kHz update rate via CAN message",
+      "integrity": "CRC-16 checksum per CAN message; sequence counter (wraps at 16) for loss-of-update detection",
+      "notes": "Primary input for reference yaw rate computation"
+    },
+    {
+      "id": "I04",
+      "interface": "Hydraulic modulator solenoid commands",
+      "counterpart": "Hydraulic Modulator (HSM)",
+      "direction": "Out",
+      "data": "Per-wheel solenoid valve PWM command (12V logic, 100 Hz base frequency, 0–100% duty cycle)",
+      "integrity": "Self-diagnostic: verify modulator response via pressure feedback sensors; timeout protection (command timeout > 500 ms triggers fault)",
+      "notes": "Direct wired connection; no CAN arbitration"
+    },
+    {
+      "id": "I05",
+      "interface": "Engine torque modulation request",
+      "counterpart": "Powertrain ECU (Engine Control Module)",
+      "direction": "Out",
+      "data": "CAN message: ESC_TorqueRequest (0–100% requested torque reduction) at 10 ms cycle time",
+      "integrity": "CRC-16 checksum; sequence counter (wraps at 256) for frame loss detection",
+      "notes": "Powertrain ECU is responsible for accepting or rejecting the request; ESC does not mandate acceptance"
+    },
+    {
+      "id": "I06",
+      "interface": "Driver display lamp (ESC warning lamp)",
+      "counterpart": "Instrument cluster / Body Control Module",
+      "direction": "Out",
+      "data": "CAN message: ESC_LampCommand (on/off state) with status flags (active intervention, fault detected, etc.)",
+      "integrity": "CRC-16 checksum; sent at 100 ms cycle time",
+      "notes": "Informs driver of system status; does not affect safety function (display is informational only)"
+    }
+  ],
+  "operating_modes": [
+    {
+      "id": "M01",
+      "name": "Off",
+      "entry_conditions": "Vehicle power-down (ignition off, battery disconnect, or shutdown command from body control module)",
+      "exit_conditions": "Ignition key turned on; power supply stable (> 9V for 12V system)",
+      "safety_relevant": false
+    },
+    {
+      "id": "M02",
+      "name": "Initialization",
+      "entry_conditions": "Ignition on; ESC ECU receives power and performs startup self-test (sensor check, actuator check, memory integrity)",
+      "exit_conditions": "Self-test completes successfully (< 5 seconds); enters Standby mode",
+      "safety_relevant": false
+    },
+    {
+      "id": "M03",
+      "name": "Standby",
+      "entry_conditions": "Initialization complete; vehicle speed < 5 km/h (engine idle, parking, or low-speed maneuver)",
+      "exit_conditions": "Vehicle speed > 5 km/h AND driver input detected (steering or throttle change > threshold)",
+      "safety_relevant": true
+    },
+    {
+      "id": "M04",
+      "name": "Active",
+      "entry_conditions": "Vehicle speed > 5 km/h AND driver input detected; ESC actively monitors yaw rate and stands ready to intervene",
+      "exit_conditions": "Stability regained and intervention duration < 10 seconds, OR vehicle speed < 5 km/h, OR permanent fault detected (fault mode transition)",
+      "safety_relevant": true
+    },
+    {
+      "id": "M05",
+      "name": "Degraded",
+      "entry_conditions": "Single sensor fault detected (e.g., one wheel speed sensor loss, IMU health check fail) but system can still provide partial stability control",
+      "exit_conditions": "Fault cleared by self-test (sensor signal restored) AND healthy mode duration > 5 seconds, OR multiple faults accumulate",
+      "safety_relevant": true
+    },
+    {
+      "id": "M06",
+      "name": "Fault",
+      "entry_conditions": "Multiple sensor faults OR critical component failure (ECU watchdog timeout, actuator electrical fault) detected; intervention disabled to prevent unintended action",
+      "exit_conditions": "Manual reset required: vehicle off/on cycle (ignition off > 10 seconds, then ignition on and self-test pass). Latched fault state to alert driver.",
+      "safety_relevant": true
+    }
+  ],
+  "allocations": [
+    {
+      "function_id": "F01",
+      "type": "Mix (Software + Mechanical + Hardware)",
+      "rationale": "Yaw rate estimation and control law implemented in firmware (Kalman filter on ESC ECU); yaw moment authority delivered via hydraulic modulator solenoids (mechanical/electromechanical hardware); wheel speed and IMU sensors provide hardware-based motion sensing"
+    },
+    {
+      "function_id": "F02",
+      "type": "Software",
+      "rationale": "Torque request calculation and CAN message generation implemented in ESC firmware; actual torque modulation executed by powertrain ECU (external item, not owned by ESC)"
+    },
+    {
+      "function_id": "F03",
+      "type": "Software",
+      "rationale": "Lamp activation logic (intervention detection, fault flagging) implemented in ESC firmware; CAN message generation and transmission via ESC ECU; physical lamp controlled by instrument cluster (external item)"
+    },
+    {
+      "function_id": "F04",
+      "type": "Software",
+      "rationale": "Sensor plausibility checks, DTC code generation, and health monitoring all implemented in ESC firmware; diagnostic output via CAN; no hardware-specific diagnostics required beyond standard microcontroller watchdog"
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A01",
+      "category": "Vehicle",
+      "assumption": "Vehicle is a passenger SUV (GVW 1800–2400 kg, seating for 5–7 occupants) with all-wheel drive (AWD) or rear-wheel drive (RWD) architecture.",
+      "rationale": "Project scope (MY2027 compact SUV); affects vehicle dynamics modeling (weight, tire characteristics) used in yaw control law tuning"
+    },
+    {
+      "id": "A02",
+      "category": "Driver",
+      "assumption": "Driver is an average non-expert operator with valid license, alert (not impaired), and expected reaction time of 1.5 seconds.",
+      "rationale": "Per ISO 26262-3 controllability definition; impacts HARA assessment of whether driver can recover vehicle after ESC failure"
+    },
+    {
+      "id": "A03",
+      "category": "Market",
+      "assumption": "Vehicle will be sold in North America and Europe; left-hand drive (LHD) and right-hand drive (RHD) configurations.",
+      "rationale": "Project scope; affects regulatory compliance (NHTSA FMVSS 126 vs. EU Regulation 661/2009) and regional calibration tuning"
+    },
+    {
+      "id": "A04",
+      "category": "Lifecycle",
+      "assumption": "HARA scope covers normal operation of the vehicle (driving on public roads, off-road recreation, towing within limits). Service and repair states (e.g., wheel bearing replacement, brake bleeding) are excluded.",
+      "rationale": "Per ISO 26262-3 Clause 6; service states are handled under maintenance procedures with different safety objectives"
+    },
+    {
+      "id": "A05",
+      "category": "Cybersecurity",
+      "assumption": "Cybersecurity threats (e.g., ECU hacking, CAN bus injection, over-the-air update attacks) are partitioned to ISO/SAE 21434 analysis. HARA addresses functional safety only.",
+      "rationale": "Scope partition; cybersecurity is a separate discipline managed by OEM's cybersecurity team"
+    },
+    {
+      "id": "A06",
+      "category": "Other-item",
+      "assumption": "Powertrain ECU will accept ESC torque reduction requests within 50 milliseconds and will comply (reduce engine torque) within 200 milliseconds.",
+      "rationale": "Powertrain ECU SIL1 requirement; enables ESC to assume reliable torque modulation capability without redundancy"
+    },
+    {
+      "id": "A07",
+      "category": "Other-item",
+      "assumption": "Brake system (master cylinder, ABS pump, hydraulic lines) will remain functional and provide modulation capability per NHTSA FMVSS 135 (hydraulic braking).",
+      "rationale": "ESC depends on healthy primary brake system; failure of brake system itself is out of scope for ESC (handled by brake system HARA)"
+    },
+    {
+      "id": "A08",
+      "category": "Environmental",
+      "assumption": "Vehicle tires will be OEM-specified size and friction coefficient envelope (dry tarmac mu > 0.8, wet mu > 0.6, snow mu > 0.3).",
+      "rationale": "Yaw control law is tuned to OEM tire characteristics; out-of-spec tires (worn, incorrect size, ice) fall outside HARA assumptions"
+    }
+  ],
+  "references": [
+    {
+      "id": "REF01",
+      "title": "ISO 26262-1:2018",
+      "version": "Functional safety — General concepts and principles"
+    },
+    {
+      "id": "REF02",
+      "title": "ISO 26262-3:2018",
+      "version": "Functional safety — Concept phase"
+    },
+    {
+      "id": "REF03",
+      "title": "ISO 26262-4:2018",
+      "version": "Functional safety — Product development at the concept phase"
+    },
+    {
+      "id": "REF04",
+      "title": "NHTSA FMVSS 126",
+      "version": "Electronic stability control systems"
+    },
+    {
+      "id": "REF05",
+      "title": "EU Regulation 661/2009",
+      "version": "Type-approval requirements for the general safety of motor vehicles"
+    },
+    {
+      "id": "REF06",
+      "title": "ISO 11152:2020",
+      "version": "Safety of machinery — Human body measurements"
+    },
+    {
+      "id": "REF07",
+      "title": "ISO 16750-2:2012",
+      "version": "Road vehicles — Electrical and electronic components — Environmental conditions and tests"
+    },
+    {
+      "id": "REF08",
+      "title": "ESC System Requirements Specification",
+      "version": "v2.1 (internal, Project Phoenix)"
+    }
+  ]
+}

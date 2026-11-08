@@ -1,0 +1,25 @@
+{
+  "config": {
+    "program_name": "ASPICE Maturity Improvement Program",
+    "sponsor": "VP Engineering",
+    "target_date": "2025-12-31",
+    "program_manager": "Process Improvement Lead"
+  },
+  "processes": [
+    {
+      "process_id": "SYS.1",
+      "gap_description": "Performance management framework needed",
+      "target_cl": 2
+    }
+  ],
+  "initiatives": [
+    {
+      "id": "INIT-001",
+      "name": "Process Performance Management Framework",
+      "gaps": "GAP-001",
+      "owner": "Systems Lead",
+      "duration": 3,
+      "budget": 50000
+    }
+  ]
+}

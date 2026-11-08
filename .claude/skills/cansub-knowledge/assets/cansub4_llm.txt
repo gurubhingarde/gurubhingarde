@@ -1,0 +1,3805 @@
+# CANsub.4 Docs, 02.05.00
+
+> User manual for the CANsub.4 CAN bus interface. Covers hardware, REST API, WebSocket API, and getting started.
+
+
+2026, CSS Electronics
+
+## Sections
+
+The list below contains the sections of this document. Each section starts with a line `[Title]:` matching its entry in the list.
+
+- [Introduction]: Overview of the CANsub.4 CAN bus interface: key features, USB and Ethernet connectivity, web-based interface, and open API.
+- [Glossary]: Definitions of the terms used throughout the CANsub.4 manual.
+- [Specification]: Technical specifications for the CANsub.4: USB power, Ethernet, display, timestamping, CAN bus channels with galvanic isolation, and mechanical dimensions.
+- [Getting started]: Step-by-step first-time setup guide for the CANsub.4: USB connection, browser access, and initial CAN bus configuration.
+- [Connectivity]: How to connect to the CANsub.4 via USB or Ethernet, device hostname, device discovery (mDNS), and security (TLS).
+- [Data interface]: Technical details of data interfaces (USB and Ethernet), including interface selection logic, network settings, and unique interface hostnames.
+- [Discovery]: How to discover devices on a network using mDNS and DNS-SD with subnet scanning as a fallback. Includes service properties, TXT records for API version and channels, discovery tools for Windows and Linux, and troubleshooting.
+- [Security]: Overview of how the CANsub.4 secures its USB and Ethernet connections with TLS: the device and root certificates (ECDSA P-256), root certificate trust, hostname verification, and the cipher suite. Optional client authentication is covered under TLS Mutual Authentication (mTLS).
+- [TLS Mutual Authentication (mTLS)]: Optional TLS Mutual Authentication (mTLS) on the CANsub.4: the required steps to create, upload, and install a client certificate, plus optional CA-signed certificates and certificate management with curl.
+- [Time]: How the CANsub.4 timestamps CAN bus frames, and how the device time is set manually (via the REST API) or synchronized automatically (using PTP).
+- [Precision Time Protocol (PTP)]: CANsub.4 PTP time synchronization. Supported PTP master configuration. Measured accuracy in various setups. Troubleshooting.
+- [Hardware]: Hardware reference for the CANsub.4: connectors, display, enclosure, and device label.
+- [Connectors]: Physical connector reference for the CANsub.4: USB-C, RJ45, and CAN bus connectors with pinout diagrams for D-sub connectors.
+- [Display]: Reference for the CANsub.4 LCD display: layout modes, symbols, bus state indicators, network status, and PTP synchronization status.
+- [Enclosure]: The CANsub.4 aluminum enclosure with mounting flanges: engineering drawing and 3D model downloads.
+- [Label]: The CANsub.4 device label: unique device ID, hardware version, production date, MAC address, and QR code.
+- [API]: Overview of the CANsub.4 open API: REST API for configuration and state monitoring, WebSocket API for live CAN bus data transfer.
+- [REST API]: Reference for all CANsub.4 REST API endpoints: device info, device time and PTP status, CAN channel configuration, hardware filters, and transmission sequences.
+- [WebSocket API]: Reference for the CANsub.4 WebSocket API: HDLC framing, byte-stuffing, CAN frame serialization format, and decoding flow.
+- [Firmware]: How to update the CANsub.4 firmware via a browser: update steps, firmware downloads, and changelog.
+- [Legal information]: Usage warnings, terms, electromagnetic compatibility certifications (CE, FCC, IC), and contact information for the CANsub.4.
+- [Bit-timing]: Bit-timing configuration reference for the CANsub.4: pre-calculated settings for CAN and CAN FD at various bus speeds on an 80 MHz clock.
+- [Install client certificate (mTLS)]: How to import a client certificate (PKCS#12 bundle) into Chrome or Firefox so the browser can authenticate to the CANsub.4 using TLS Mutual Authentication (mTLS).
+- [TLS handshake]: Illustrative sequence diagram of the TLS handshake between a client and the CANsub.4, including the optional TLS Mutual Authentication steps.
+- [CANsub certificate installation]: How to install the CANsub root TLS certificate in Chrome or Firefox to trust the CANsub.4 without browser security warnings.
+
+---
+
+[Introduction]:
+
+# Introduction
+
+The **CANsub.4** is a compact and professional CAN bus interface with four galvanically isolated CAN buses.
+It combines high performance with features matching or exceeding those typically only found in larger, more expensive devices.
+
+The device connects via either USB<sup>[1](#usb)</sup> or Ethernet, both exposing an identical network interface<sup>[2](#net)</sup>.
+
+The device has an [LCD color display](https://canlogger.csselectronics.com/cansub-docs/cansub4/hardware/display.html.md#display) providing useful information, such as CAN bus state, frame rate, and bus load.
+
+A built-in web-based user interface (*webCAN*) can be accessed through a browser without installing any software<sup>[3](#tls)</sup>. The *webCAN* tool comes with a rich set of features, such as raw-frame view, decoded-frame view, and live plotting.
+
+[python-can](https://python-can.readthedocs.io/) support is provided through the [python-can-cansub](https://pypi.org/project/python-can-cansub/) package.
+
+The CANsub.4 has an open [API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/index.html.md#api) based on easily accessible technologies to encourage users to create 3rd-party integrations<sup>[4](#rd)</sup>.
+
+![image](cansub4.jpg)
+
+---
+* <a id='usb'>**[1]**</a> Network over USB using the USB CDC-NCM device class.
+* <a id='net'>**[2]**</a> Switching between USB and Ethernet requires only a URL change.
+* <a id='tls'>**[3]**</a> The CANsub root certificate can optionally be installed in the browser.
+* <a id='rd'>**[4]**</a> A range of 3rd-party integrations and code examples are available on [csselectronics.com](https://csselectronics.com/).
+
+---
+
+[Glossary]:
+
+# Glossary
+
+The terms below are explained as they apply to the CANsub.4.
+
+<a id="term-API"></a>
+
+API
+: The open interface through which software controls the device. It consists of the [REST API](#term-REST-API) and the [WebSocket](#term-WebSocket) API.
+
+<a id="term-API-version"></a>
+
+API version
+: The version number of the [API](#term-API).
+
+<a id="term-Bit-rate"></a>
+
+Bit rate
+: The speed of the CAN bus in bits per second. Classical CAN uses one bit rate for the whole frame. CAN FD uses a [nominal bit rate](#term-Nominal-bit-rate) and a [data bit rate](#term-Data-bit-rate).
+
+<a id="term-Bit-timing"></a>
+
+Bit timing
+: The channel settings that define the [bit rate](#term-Bit-rate) and the [sample point](#term-Sample-point).
+
+<a id="term-Bus-load"></a>
+
+Bus load
+: The percentage of time the CAN bus is not idle. 100 percent means the bus is never idle.
+
+<a id="term-Bus-off"></a>
+
+Bus off
+: A CAN node state entered after too many errors. The node no longer takes part in the bus traffic.
+
+<a id="term-Byte-stuffing"></a>
+
+Byte-stuffing
+: A method for marking where one message ends and the next begins in a stream of bytes. One byte value is reserved as the boundary marker, and any occurrence of that value inside a message is replaced by a two-byte escape sequence, so the marker never appears in the message content.
+
+<a id="term-CAN-bus"></a>
+
+CAN bus
+: A physical CAN bus network. The device can be connected to one bus per channel.
+
+<a id="term-CAN-channel"></a>
+
+CAN channel
+: One of the numbered CAN interfaces of the device. Each CAN channel can be connected to one [CAN bus](#term-CAN-bus).
+
+<a id="term-CDC-NCM"></a>
+
+CDC-NCM
+: The USB device class making the device appear as a network adapter.
+
+<a id="term-Client"></a>
+
+Client
+: The software connecting to the device via the network, for example the browser running webCAN or a user script.
+
+<a id="term-Data-bit-rate"></a>
+
+Data bit rate
+: The [bit rate](#term-Bit-rate) used for the data phase of CAN FD frames with the bit rate switch (BRS) flag set.
+
+<a id="term-Device"></a>
+
+Device
+: The CANsub.4 CAN bus interface described by this manual.
+
+<a id="term-Device-clock"></a>
+
+Device clock
+: The physical clock inside the device.
+
+<a id="term-Device-ID"></a>
+
+Device ID
+: A globally unique 8-digit hexadecimal identifier of a device.
+
+<a id="term-Device-time"></a>
+
+Device time
+: The date and time derived from the [device clock](#term-Device-clock).
+
+<a id="term-Drift"></a>
+
+Drift
+: The gradual divergence of a clock from another clock.
+
+<a id="term-Endpoint"></a>
+
+Endpoint
+: A single address in the REST API, such as `/api/time`, that a client reads or writes.
+
+<a id="term-Error-active"></a>
+
+Error active
+: A CAN node state. The normal operating state, in which the node takes full part in the bus traffic.
+
+<a id="term-Error-frame"></a>
+
+Error frame
+: A CAN bus error event.
+
+<a id="term-Error-passive"></a>
+
+Error passive
+: A CAN node state entered after repeated errors. The node still takes part in the bus traffic, but with reduced ability to signal errors.
+
+<a id="term-Ethernet-mode"></a>
+
+Ethernet mode
+: The operating mode in which the device transfers data via the Ethernet connection.
+
+<a id="term-Frame"></a>
+
+Frame
+: A single CAN frame.
+
+<a id="term-Hardware-filter"></a>
+
+Hardware filter
+: A CAN frame identifier filter applied on the device itself (in contrast to a software filter implemented by the [Client](#term-Client)).
+
+<a id="term-HDLC"></a>
+
+HDLC
+: A communication protocol used for transmitting data between devices.
+
+<a id="term-Hostname"></a>
+
+Hostname
+: A name assigned to a device connected to a computer network, optionally used instead of its IP address.
+
+<a id="term-mDNS"></a>
+
+mDNS
+: A mechanism that lets a PC find a device by its hostname on a local network.
+
+<a id="term-mTLS"></a>
+
+mTLS
+: TLS Mutual Authentication is a client authentication mechanism comparable to password protection.
+
+<a id="term-Nominal-bit-rate"></a>
+
+Nominal bit rate
+: The [bit rate](#term-Bit-rate) used for all of a frame except the data phase of CAN FD frames with the bit rate switch (BRS) flag set.
+
+<a id="term-NTP"></a>
+
+NTP
+: Network Time Protocol. A mechanism for keeping clocks synchronized with millisecond accuracy.
+
+<a id="term-Offset"></a>
+
+Offset
+: - PTP: How far the device clock is from the PTP master.
+
+<a id="term-OpenAPI"></a>
+
+OpenAPI
+: A machine-readable description of a REST API that can be used for documentation or code generation.
+
+<a id="term-PoE"></a>
+
+PoE
+: Power over Ethernet. Providing power to a device through an Ethernet cable.
+
+<a id="term-Power-cycle"></a>
+
+Power cycle
+: Switching the device off and on again by removing and restoring power.
+
+<a id="term-ppb"></a>
+
+ppb
+: Parts per billion.
+
+<a id="term-ppm"></a>
+
+ppm
+: Parts per million.
+
+<a id="term-PTP"></a>
+
+PTP
+: Precision Time Protocol. A mechanism for keeping clocks synchronized with microsecond accuracy.
+
+<a id="term-PTP-client"></a>
+
+PTP client
+: A network node that obtains its time from a [PTP master](#term-PTP-master) using [PTP](#term-PTP). The device is a PTP client.
+
+<a id="term-PTP-master"></a>
+
+PTP master
+: A network node that provides time to PTP clients using [PTP](#term-PTP).
+
+<a id="term-python-can-cansub"></a>
+
+python-can-cansub
+: A [Python package](https://github.com/CSS-Electronics/python-can-cansub) that implements the [python-can](https://python-can.readthedocs.io/) interface on top of the device [API](#term-API).
+
+<a id="term-REST-API"></a>
+
+REST API
+: An interface using standard HTTP requests. The part of the device [API](#term-API) used for configuration and status.
+
+<a id="term-Sample-point"></a>
+
+Sample point
+: The position in percent within a bit at which the bus level is read. Defined through the [bit timing](#term-Bit-timing).
+
+<a id="term-Silent-mode"></a>
+
+Silent mode
+: A CAN bus mode where a node only listens and never transmits. Also called *listen-only* mode.
+
+<a id="term-Timestamp"></a>
+
+Timestamp
+: The [device time](#term-Device-time) at which a CAN frame was on the bus.
+
+<a id="term-TLS"></a>
+
+TLS
+: Transport Layer Security. Security mechanism used for authentication and data encryption on a network. Can optionally be extended with [mTLS](#term-mTLS).
+
+<a id="term-Transmission-acknowledgement"></a>
+
+Transmission acknowledgement
+: A confirmation that a CAN frame has been successfully transmitted on a bus.
+
+<a id="term-Transmission-sequence"></a>
+
+Transmission sequence
+: A sequence of CAN frames to be automatically transmitted by the device.
+
+<a id="term-USB-mode"></a>
+
+USB mode
+: The operating mode in which the device transfers data via the USB connection.
+
+<a id="term-VPN"></a>
+
+VPN
+: Virtual Private Network. A connection into a local network from a remote location.
+
+<a id="term-webCAN"></a>
+
+webCAN
+: The web-based user interface built into the device, opened in a browser without installing software.
+
+<a id="term-WebSocket"></a>
+
+WebSocket
+: An interface using a persistent two-way connection over HTTP. The part of the device [API](#term-API) used for live transfer of data.
+
+---
+
+[Specification]:
+
+# Specification
+
+## USB
+
+* USB-C connector
+* Powered through USB connector (5 V)
+* USB CDC-NCM device class
+
+## Ethernet
+
+* RJ45 connector
+* 10BASE-T/100BASE-TX IEEE 802.3 Ethernet transceiver
+* Link status LED
+
+## Display
+
+* 0.96” backlit LCD color display
+
+## Network
+
+* Network over USB (CDC-NCM) or Ethernet
+* Discovery via mDNS
+* Data secured using TLS
+* Optional user authentication using TLS Mutual Authentication (mTLS)
+
+## Time
+
+* One microsecond (1 us) hardware timestamping of CAN bus frames (both RX and TX)
+* Time synchronization via PTP (IEEE 1588) with a relative error approaching the timestamp resolution<sup>[1](#fn-ptp-setup)</sup>
+
+## CAN bus
+
+* Physical
+  > * Four galvanically isolated<sup>[2](#fn-basic-isolation)</sup> physical CAN bus interfaces
+  > * DB25 (D-sub25) connector
+* Transceiver
+  > * Compliant with ISO 11898-2:2016 (classical CAN and CAN FD)
+  > * Short-circuit, bus-fault, and undervoltage protection
+  > * Ideal passive behavior when unpowered (high impedance / no load)
+  > * TXD dominant timeout (prevents network blocking in the event of a failure)
+* Controller
+  > * Based on MCAN IP from Bosch
+  > * Customizable bit rate / bit timing / sample point
+  > * Customizable hardware filters (range or mask)
+  > * Support for bus-error monitoring
+  > * Support for listen-only mode (transmission disabled)
+* Application
+  > * Frame rate, frame count, and bus load calculated by the device
+  > * Hardware transmission jobs for high-accuracy frame spacing
+  > * Frame transmission acknowledgements with actual transmission timestamps
+
+## Mechanical
+
+* Robust aluminum enclosure
+* Flanges for secure mounting
+* Dimensions: 67 x 87 x 20 mm (L x W x H)
+* Operating temperature: -25 °C to +70 °C
+
+---
+* <a id='fn-ptp-setup'>**[1]**</a> The achievable relative timestamp error depends on the PTP master and network setup.
+* <a id='fn-basic-isolation'>**[2]**</a> The CANsub.4 implements a *basic* galvanic isolation, making it easy to connect CAN bus networks not subjected to high voltage differences.
+
+---
+
+[Getting started]:
+
+# Getting started
+
+This guide describes how to set up the CANsub.4 for the first time using a USB-C cable and the browser-based webCAN tool.
+
+#### NOTE
+Connecting via USB creates a virtual network adapter automatically. No driver installation is required. The webCAN tool and the device [API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/index.html.md#api) work identically via both USB and Ethernet.
+
+---
+
+## Prerequisites
+
+- Review the [usage warning](https://canlogger.csselectronics.com/cansub-docs/cansub4/legal/index.html.md#usage-warning) before connecting the device to a live CAN bus.
+- Optionally, [install the CANsub root certificate](https://canlogger.csselectronics.com/cansub-docs/cansub4/getting_started/certificate/index.html.md#cansub-certificate-installation) to prevent browser security warnings.
+
+---
+
+## Step 1: Power on
+
+Connect the CANsub.4 to a PC using a USB-C cable. The display activates and shows the device network information.
+
+![Display example.](getting_started/cansub_display_net_usb.bmp)
+
+---
+
+## Step 2: Connect to the device
+
+Open a browser and enter the URL shown on the display, `https://[HOSTNAME].local`, to open webCAN. The hostname is `[DEVICE-ID]-usb` or `[DEVICE-ID]-eth` depending on the connection.
+
+#### NOTE
+If the CANsub root certificate has not been installed, the browser will display a security warning. Accept the warning to proceed.
+
+---
+
+## Step 3: Connect a CAN bus
+
+Connect the CANsub.4 to a CAN bus (see [connector pinout](https://canlogger.csselectronics.com/cansub-docs/cansub4/hardware/connector.html.md#can-bus)).
+
+#### NOTE
+An optional DB25-4xDB9 splitter cable is available.
+
+---
+
+## Step 4: Use the webCAN tool
+
+webCAN includes a separate getting-started guide, available via the ![icon_help](getting_started/help-circle.png) icon in the top-right corner.
+
+---
+
+## Step 5: Where to go next
+
+- Try connecting the CANsub.4 to a local network (see [Data interface](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/data_interface.html.md#data-interface))
+- Explore the webCAN tool features in depth
+- Explore supported 3rd-party tools and programming language interfaces (see [CANsub tools](https://csselectronics.com/pages/can-bus-software-api-tools/))
+- Explore the open API for advanced custom integrations (see [API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/index.html.md#api))
+
+---
+
+[Connectivity]:
+
+# Connectivity
+
+The CANsub.4 is always powered via the USB cable. Data is transferred via either the USB cable or the Ethernet cable. In both cases, data is transferred through a network interface. The webCAN tool and the device [API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/index.html.md#api) work identically via both connections.
+
+This section documents the data interface (USB/Ethernet), device hostname, device discovery (using mDNS), and security (using TLS).
+
+---
+
+[Data interface]:
+
+# Data interface
+
+The device selects which data interface to use based on the following logic<sup>[1](#fn-change-mode)</sup>:
+
+```mermaid
+flowchart LR
+
+    pwr("Power on (via USB)") --> detect{Detect interface}
+
+    detect -->|"USB host detected" | usb("USB mode<br>(data over USB)")
+    detect -->|"Ethernet detected" | eth("Ethernet mode<br>(data over Ethernet)")
+```
+
+The detection state is shown on the device display, see [Connection layout](https://canlogger.csselectronics.com/cansub-docs/cansub4/hardware/display.html.md#connection-layout).
+
+#### NOTE
+The device uses distinct hostnames for the USB (`[DEVICE-ID]-usb.local`) and Ethernet (`[DEVICE-ID]-eth.local`) interfaces to prevent hostname resolution conflicts when switching between the two.
+
+---
+
+## USB mode
+
+In *USB mode* the device is powered via USB and transfers data via USB.
+
+```mermaid
+flowchart LR
+   USB[USB host] ===|"USB power<br>USB data" | DEV[Device]
+```
+
+When transferring data over USB, the device uses the USB CDC-NCM class<sup>[3](#fn-cdc-ncm)</sup> to expose a network interface. In this mode, the device runs a DHCP server that assigns an IP address to the connected USB host.
+
+| Hostname          | DHCP   | Network       | Device IPv4   | Host IPv4    |
+|-------------------|--------|---------------|---------------|--------------|
+| `[DEVICE-ID]-usb` | Server | `10.x.y.0/24` | `10.x.y.1`    | `10.x.y.100` |
+
+The device hostname and IP address are shown on the device display, see [Network layout](https://canlogger.csselectronics.com/cansub-docs/cansub4/hardware/display.html.md#network-layout).
+
+The webpage hosted by the device can be accessed via:
+
+- `https://[DEVICE-ID]-usb.local`<sup>[2](#fn-local)</sup> (e.g. `https://aabbccdd-usb.local`)
+- `https://[DEVICE-IP]` (e.g. `https://10.121.15.1`)
+
+The CANsub.4 is identified on the USB bus by the following vendor and product IDs:
+
+| Parameter        | Value    |
+|------------------|----------|
+| Vendor ID (VID)  | `0x04D8` |
+| Product ID (PID) | `0xE487` |
+
+The device variant, hardware version, firmware version, and ID are stored in the USB descriptors.
+
+Using `lsusb` to read the `iProduct` (variant, hw-ver, fw-ver) and `iSerial` (device ID) USB descriptor fields.
+
+```console
+$ lsusb -v -d 04d8:e487 | grep -e "iProduct" -e "iSerial"
+  iProduct                2 CANsub.4 01.02 01.02.03
+  iSerial                 3 aabbccdd
+```
+
+---
+
+## Ethernet mode
+
+In *Ethernet mode* the device is powered via USB (charger) and transfers data via Ethernet.
+
+#### NOTE
+An optional Power-over-Ethernet (PoE) adapter is available.
+
+```mermaid
+flowchart LR
+   USB[USB charger] ===|"USB power" | DEV[Device]
+   NET[Network] ===|"Ethernet data" | DEV
+```
+
+| Hostname          | DHCP   | Device IPv4   |
+|-------------------|--------|---------------|
+| `[DEVICE-ID]-eth` | Client | Assigned      |
+
+The device hostname and IP address are shown on the device display, see [Network layout](https://canlogger.csselectronics.com/cansub-docs/cansub4/hardware/display.html.md#network-layout).
+
+#### NOTE
+A DHCP server is required on the network for the device to obtain an IP address. The device MAC address can be found via the [label](https://canlogger.csselectronics.com/cansub-docs/cansub4/hardware/label.html.md#label) or [display](https://canlogger.csselectronics.com/cansub-docs/cansub4/hardware/display.html.md#information-layout).
+
+The webpage hosted by the device can be accessed via:
+
+- `https://[DEVICE-ID]-eth.local`<sup>[2](#fn-local)</sup> (e.g. `https://aabbccdd-eth.local`)
+- `https://[DEVICE-IP]` (e.g. `https://192.168.1.100`)
+
+---
+* <a id='fn-change-mode'>**[1]**</a> Changing the data interface mode requires a power cycle.
+* <a id='fn-local'>**[2]**</a> `.local` is used for hostnames on a local network.
+* <a id='fn-cdc-ncm'>**[3]**</a> CDC-NCM enables Ethernet networking over a USB connection.
+
+---
+
+[Discovery]:
+
+# Discovery
+
+#### NOTE
+The device ID is printed on the device enclosure and can be used to construct the device hostname as explained in [Data interface](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/data_interface.html.md#data-interface) and [Getting started](https://canlogger.csselectronics.com/cansub-docs/cansub4/getting_started/index.html.md#getting-started). This section explains how to detect a CANsub device when the device ID is unknown.
+
+The CANsub.4 advertises itself on the local network (USB or Ethernet) using mDNS<sup>[1](#fn-mdns)</sup> and DNS-SD<sup>[2](#fn-dnssd)</sup>. This allows the device to be discovered without knowing its IP address in advance.
+
+The device registers a service of type `_cansub._tcp` with the following properties:
+
+| Property        | Value                                                                       |
+|-----------------|-----------------------------------------------------------------------------|
+| Service type    | `_cansub._tcp`                                                              |
+| Hostname        | `[HOSTNAME].local`<br/>(`[DEVICE-ID]-usb.local` or `[DEVICE-ID]-eth.local`) |
+| Port            | `443`                                                                       |
+| TXT: `api`      | REST API version (e.g. `02.00`)                                             |
+| TXT: `channels` | Number of CAN bus channels (`1`, `2`, or `4`)                               |
+
+### Windows
+
+On Windows, the `dns-sd`<sup>[3](#fn-dnssd-win)</sup> tool can be used for mDNS discovery.
+
+The `dns-sd` tool used to detect a CANsub device with hostname `aabbccdd-usb`.
+
+```doscon
+C:\>dns-sd -Z _cansub._tcp local
+
+_cansub._tcp                                    PTR     aabbccdd-usb._cansub._tcp
+aabbccdd-usb._cansub._tcp                       TXT     "api=02.00" "channels=4"
+```
+
+### Linux
+
+On Linux, the `avahi-browse`<sup>[4](#fn-avahi)</sup> tool can be used for mDNS discovery.
+
+The `avahi-browse` tool used to detect a CANsub device with hostname `aabbccdd-usb`.
+
+```console
+$ avahi-browse _cansub._tcp --resolve
+
+= enx0200aabbccdd IPv4 aabbccdd-usb     _cansub._tcp         local
+hostname = [aabbccdd-usb.local]
+address = [10.121.15.1]
+port = [443]
+txt = ["channels=4" "api=02.00"]
+```
+
+---
+
+## Scanning
+
+When mDNS discovery is not possible (e.g. when accessing the device via a VPN), the device can be found by scanning the subnet for services on port 443 (HTTPS).
+
+#### NOTE
+Scanning the network returns all devices with a service running on port 443 (HTTPS).
+
+The `nmap`<sup>[5](#fn-nmap)</sup> tool can be used to scan the subnet to which the device is connected. In the example below, `192.168.1.0/24` covers the addresses 192.168.1.1 to 192.168.1.254.
+
+Example of using `nmap` to scan the subnet `192.168.1.0/24` for services on port 443 (HTTPS).
+
+```console
+$ nmap -Pn -p 443 --open 192.168.1.0/24
+
+Nmap scan report for 192.168.1.100
+Host is up (0.00055s latency).
+```
+
+If `nmap` returns multiple results, confirm which belong to a CANsub device by probing the [REST API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest.html.md#device-info):
+
+Example of using `curl` to verify the device ID.
+
+```console
+$ curl -k https://192.168.1.100/api/info
+
+{"id":"aabbccdd","hw_ver":"01.02","fw_ver":"01.02.03","mac":"001122334455","usb":"04D8&E487"}
+```
+
+---
+
+## Troubleshooting
+
+If the device is not discovered, check the following possible causes:
+
+- The PC and the device are not on the same network segment. mDNS multicast is not forwarded between networks, including VPN connections<sup>[6](#fn-vpn-ip)</sup> and virtual networks (e.g. WSL or Docker)<sup>[7](#fn-virtual-net)</sup>.
+- A network device filters multicast packets between the PC and the device (e.g. a managed switch, Wi-Fi access point, or firewall).
+- A firewall on the PC blocks mDNS packets (UDP port 5353). This is common when a USB network adapter is classified as a *Public network* on Windows.
+- A VPN client is active on the PC and blocks or redirects mDNS packets on the local network.
+
+---
+* <a id='fn-mdns'>**[1]**</a> mDNS (Multicast DNS, RFC 6762) resolves hostnames on a local network without a DNS server.
+* <a id='fn-dnssd'>**[2]**</a> DNS-SD (DNS Service Discovery, RFC 6763) advertises services on a local network.
+* <a id='fn-dnssd-win'>**[3]**</a> `dns-sd.exe` is included with [Bonjour for Windows](https://support.apple.com/kb/DL999) (Apple).
+* <a id='fn-avahi'>**[4]**</a> `avahi-browse` is part of the `avahi-utils` package.
+* <a id='fn-nmap'>**[5]**</a> `nmap` is part of the `nmap` package on Linux. For Windows, an installer is available from [nmap.org](https://nmap.org/download.html).
+* <a id='fn-vpn-ip'>**[6]**</a> The device can still be accessed via its IP address through a VPN connection, see [Scanning](#scanning).
+* <a id='fn-virtual-net'>**[7]**</a> Virtual machines and containers can typically be configured to share the network of the host, which allows mDNS discovery from within the virtual environment.
+
+---
+
+[Security]:
+
+# Security
+
+Data transferred over the device network interface (USB or Ethernet) is secured by Transport Layer Security (TLS). TLS ensures that data exchanged with the CANsub.4 is encrypted and that the user is connecting to a genuine CANsub.4. When connected via Ethernet, access can optionally be restricted using [TLS Mutual Authentication](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/security/mtls.html.md#tls-mutual-authentication-mtls).
+
+#### NOTE
+In TLS terminology, a *user* uses a *client* application, such as a browser, to establish a secure connection to a *server* (CANsub.4).
+
+The CANsub.4 proves it is genuine using a built-in certificate signed by the root certificate below.
+
+[`CANsub root certificate`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/c09c84fa360e0930c50285fffb35c76f/cansub_root_cert.crt)
+<br/>
+`SHA-256 fingerprint = D064C85905195400216A11BB50D754865ED2B5F997D36A9EA2EA97883B15D0F1`
+<br/>
+
+#### NOTE
+A client can be made to trust the CANsub.4 by installing the CANsub root certificate. For more information on how to install the root certificate, see [CANsub certificate installation](https://canlogger.csselectronics.com/cansub-docs/cansub4/getting_started/certificate/index.html.md#cansub-certificate-installation).
+
+The table below provides an overview of the CANsub root (shared) and CANsub device (device-specific) certificate parameters.
+
+| Parameter           | Root certificate   | Device certificate                                       |
+|---------------------|--------------------|----------------------------------------------------------|
+| Key algorithm       | ECDSA P-256        | ECDSA P-256                                              |
+| Signature algorithm | ECDSA-SHA256       | ECDSA-SHA256                                             |
+| Issued to           | `CANsub root`      | `CANsub [DEVICE-ID]`                                     |
+| Hostnames (SAN)     |                    | `[DEVICE-ID]-usb.local`<br/><br/>`[DEVICE-ID]-eth.local` |
+
+#### NOTE
+The device certificate Subject Alternative Name (SAN) field allows hostname verification. Hostname verification is **not** possible when the device is accessed via an IP address.
+
+The CANsub.4 always uses the TLS cipher suite `ECDHE-ECDSA-AES128-GCM-SHA256`<sup>[1](#fn-cipher-suite)</sup>.
+
+Certificate validity periods (`notBefore` and `notAfter`) are not enforced because the CANsub.4 does not know the time at power-on.
+
+A simplified illustration of the TLS handshake is provided in the [TLS handshake](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/security/tls_handshake.html.md#tls-handshake) diagram.
+
+---
+* <a id='fn-cipher-suite'>**[1]**</a> The client must support the cipher suite for the TLS handshake to succeed.
+
+---
+
+[TLS Mutual Authentication (mTLS)]:
+
+# TLS Mutual Authentication (mTLS)
+
+By default, TLS encrypts the connection but does not determine *who* is allowed to connect to the CANsub.4. TLS Mutual Authentication (mTLS) adds client verification, ensuring that only authenticated users can access the device, similar to password protection.
+
+TLS Mutual Authentication uses asymmetric cryptography. Enabling it does not require storing any client secrets on the device. Only public certificate material is stored.
+
+The CANsub.4 supports optional mTLS **over the Ethernet connection**<sup>[1](#fn-mtls-persistent)</sup>.
+
+#### NOTE
+The USB connection can always be used to regain access to the device (mTLS is never enforced over USB), for example if the client certificate or key is lost.
+
+---
+
+## Enable Mutual Authentication
+
+The steps below require the command-line tools **bash**, **OpenSSL**<sup>[2](#fn-openssl)</sup>, and **curl**. These are available by default on Linux and macOS. On Windows, all three are provided through [Git Bash](https://git-scm.com/download/win) (a terminal that includes commonly used command-line tools). Once installed, Git Bash can be opened from the Start menu.
+
+1. [Create a client certificate](#create-a-client-certificate).
+2. [Upload the client certificate](#upload-the-client-certificate).
+3. [Install the client certificate](#install-the-client-certificate).
+
+#### TIP
+The steps create and use several files. Place all files in one directory and open the terminal in that directory.
+
+The screen recording below demonstrates how to use Git Bash on Windows to perform steps 1 and 2. The CANsub root certificate (`cansub_root_cert.crt`) and the client certificate script (`demo_cansub_self_signed_cert.sh`) have been placed in the directory `C:\Users\css\Desktop\mtls\`.
+
+<hr class="docutils" style="clear:both;">
+
+### 1. Create a client certificate
+
+This step demonstrates how to create a **self-signed** client certificate suitable for a single user of a single device. For multiple users or multiple devices, consider a [CA-signed certificate](#ca-signed-certificate) (advanced).
+
+The script<sup>[3](#fn-script-is-doc)</sup> below uses OpenSSL to create a client certificate. The public certificate is uploaded directly to the CANsub.4, which then trusts only that one certificate.
+
+Download, inspect, and run the script with a client name (user name) and an optional password (used to protect the `.p12` bundle):
+
+[`demo_cansub_self_signed_cert.sh`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/463aa8a932d32deab52077b4915fd4df/demo_cansub_self_signed_cert.sh)
+<br/>
+```console
+$ bash demo_cansub_self_signed_cert.sh [CLIENT-NAME] [PASSWORD]
+```
+
+The script generates the following files:
+
+| File                | Sensitive   | Purpose                                                        |
+|---------------------|-------------|----------------------------------------------------------------|
+| `[CLIENT-NAME].crt` | No          | Client public certificate. Uploaded to the CANsub.4.           |
+| `[CLIENT-NAME].key` | Yes         | Client private key.                                            |
+| `[CLIENT-NAME].p12` | Yes         | Client `crt` and `key` bundled in one file for browser import. |
+<details>
+<summary>Show demo_cansub_self_signed_cert.sh</summary>
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# Minimum steps to create a self-signed client certificate + key for mTLS.
+# Usage: ./demo_cansub_self_signed_cert.sh [client_name] [password]
+
+# Disable Git Bash (MSYS) path conversion on Windows (no effect on Linux/macOS).
+export MSYS_NO_PATHCONV=1
+
+CLIENT_NAME=${1:-client}
+CLIENT_PASSWORD=${2:-}
+
+CLIENT_KEY="${CLIENT_NAME}.key"
+CLIENT_CRT="${CLIENT_NAME}.crt"
+CLIENT_P12="${CLIENT_NAME}.p12"
+
+# 1. Generate a private key (EC P-256, supported by the CANsub)
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:prime256v1 -out "${CLIENT_KEY}"
+chmod 600 "${CLIENT_KEY}"
+
+# 2. Generate a self-signed client certificate.
+#    The extensions below make it a valid TLS client certificate:
+#      basicConstraints=CA:FALSE     end-entity certificate, not a CA
+#      keyUsage=digitalSignature     lets the client sign during the TLS handshake
+#      extendedKeyUsage=clientAuth   marks the certificate for client authentication
+openssl req -x509 -new -sha256 -key "${CLIENT_KEY}" -out "${CLIENT_CRT}" -days 3650 \
+    -subj "/CN=${CLIENT_NAME}" \
+    -addext "basicConstraints=critical,CA:FALSE" \
+    -addext "keyUsage=critical,digitalSignature" \
+    -addext "extendedKeyUsage=clientAuth"
+
+# 3. Create a PKCS#12 bundle for browsers.
+openssl pkcs12 -export -out "${CLIENT_P12}" \
+    -inkey "${CLIENT_KEY}" \
+    -in "${CLIENT_CRT}" \
+    -name "${CLIENT_NAME}" \
+    -passout "pass:${CLIENT_PASSWORD}"
+
+if [ -z "${CLIENT_PASSWORD}" ]; then
+    echo "Generated: ${CLIENT_KEY}, ${CLIENT_CRT}, ${CLIENT_P12} (no password)"
+else
+    echo "Generated: ${CLIENT_KEY}, ${CLIENT_CRT}, ${CLIENT_P12} (with password)"
+fi
+```
+
+</details>
+
+---
+
+### 2. Upload the client certificate
+
+This step demonstrates how to upload the client certificate to the CANsub.4 using the command-line tool curl<sup>[4](#fn-revoke)</sup> with the CANsub.4 connected via USB (`-usb.local`).
+
+Download the CANsub root certificate, which is required to connect to the CANsub.4.
+
+[`cansub_root_cert.crt`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/c09c84fa360e0930c50285fffb35c76f/cansub_root_cert.crt)
+<br/>
+
+Replace `[CERTIFICATE-NAME]` with the name of the certificate to upload (e.g. `client`). Replace `[DEVICE-ID]` with the CANsub.4 device ID (e.g. `aabbccdd`).
+
+```console
+$ curl --cacert cansub_root_cert.crt --ssl-no-revoke -i -X PUT --data-binary @[CERTIFICATE-NAME].crt https://[DEVICE-ID]-usb.local/api/client-cert
+
+HTTP/1.1 200
+```
+
+If the command returns `HTTP/1.1 200`, the certificate is accepted and mTLS is enabled.
+
+The *fingerprint* of the loaded certificate can optionally be [verified](#verify-the-loaded-certificate).
+Mutual Authentication can be disabled again by [removing](#remove-the-certificate) the certificate.
+
+---
+
+### 3. Install the client certificate
+
+With mTLS enabled, clients connecting to the device must present the client certificate and key to gain access over the Ethernet connection. How to install the client certificate depends on the tool used to connect to the CANsub.4.
+
+For a browser, see [Install client certificate (mTLS)](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/security/client_certificate/client_cert_install.html.md#install-client-certificate-mtls).
+
+Mutual Authentication can optionally be [tested using curl](#test-mutual-authentication) (advanced).
+
+---
+
+### CA-signed certificate
+
+A certificate authority (CA) signs client certificates. Uploading the CA certificate (`ca.crt`) to the CANsub.4 makes the CANsub.4 trust every client certificate the CA signs. New clients can then be added without changing the CANsub.4 configuration, and the same CA certificate can be uploaded to multiple CANsub devices.
+
+```mermaid
+flowchart TB
+    CAC["CA certificate<br>(ca.crt / ca.key)"]
+    CAC -->|"signs" | A1["Client 1"]
+    CAC -->|"signs" | A2["Client 2"]
+    CAC -->|"signs" | A3["Client N"]
+```
+
+#### NOTE
+When using a CA-signed certificate, upload `ca.crt` in [step 2](#upload-the-client-certificate) (rather than an individual client certificate). The CANsub.4 then trusts every client the CA signs.
+
+The script<sup>[3](#fn-script-is-doc)</sup> below uses OpenSSL to create the CA and sign client certificates. Download, inspect, and run it once per client. The CA is created on the first run and reused for every client added afterwards:
+
+[`demo_cansub_ca_signed_cert.sh`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/4a461c9d668dd8b04ee3d8590afc2a0e/demo_cansub_ca_signed_cert.sh)
+<br/>
+
+First client (also creates `ca.crt` and `ca.key`).
+
+```console
+$ bash demo_cansub_ca_signed_cert.sh [CLIENT-NAME] [PASSWORD]
+```
+
+Additional clients reuse the existing CA.
+
+```console
+$ bash demo_cansub_ca_signed_cert.sh [CLIENT-NAME] [PASSWORD]
+```
+
+The script generates the following files:
+
+| File                | Sensitive   | Purpose                                                        |
+|---------------------|-------------|----------------------------------------------------------------|
+| `ca.crt`            | No          | CA public certificate. Uploaded to the CANsub.4.               |
+| `ca.key`            | Yes         | CA private key. Signs client certificates.                     |
+| `[CLIENT-NAME].crt` | No          | Client public certificate. Signed by the CA.                   |
+| `[CLIENT-NAME].key` | Yes         | Client private key.                                            |
+| `[CLIENT-NAME].p12` | Yes         | Client `crt` and `key` bundled in one file for browser import. |
+<details>
+<summary>Show demo_cansub_ca_signed_cert.sh</summary>
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# Minimum steps to create a CA-signed client certificate + key for mTLS.
+# Usage: ./demo_cansub_ca_signed_cert.sh [client_name] [password]
+# Re-run with a different client_name to enroll more users (the CA is reused).
+
+# Disable Git Bash (MSYS) path conversion on Windows (no effect on Linux/macOS).
+export MSYS_NO_PATHCONV=1
+
+CLIENT_NAME=${1:-client}
+CLIENT_PASSWORD=${2:-}
+
+CLIENT_KEY="${CLIENT_NAME}.key"
+CLIENT_CRT="${CLIENT_NAME}.crt"
+CLIENT_P12="${CLIENT_NAME}.p12"
+CLIENT_CSR="${CLIENT_NAME}.csr"
+
+CA_NAME="CANsub Client CA"
+CA_KEY="ca.key"
+CA_CRT="ca.crt"
+CA_CREATED=false
+
+if [ ! -f "${CA_KEY}" ]; then
+
+    # 1. Generate the root CA private key (EC P-256, supported by the CANsub).
+    #    The CA key is reused to sign future client certificates.
+    openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:prime256v1 -out "${CA_KEY}"
+    chmod 600 "${CA_KEY}"
+
+    # 2. Generate the self-signed root CA certificate.
+    #    basicConstraints=CA:TRUE and keyUsage=keyCertSign let it sign client certificates.
+    openssl req -x509 -new -sha256 -key "${CA_KEY}" -out "${CA_CRT}" -days 7300 \
+        -subj "/CN=${CA_NAME}" \
+        -addext "basicConstraints=critical,CA:TRUE" \
+        -addext "keyUsage=critical,keyCertSign"
+
+    CA_CREATED=true
+fi
+
+# 3. Generate a private key (EC P-256, supported by the CANsub)
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:prime256v1 -out "${CLIENT_KEY}"
+chmod 600 "${CLIENT_KEY}"
+
+# 4. Generate a certificate signing request (CSR) for the client.
+#    The requested extensions make it a valid TLS client certificate:
+#      basicConstraints=CA:FALSE     end-entity certificate, not a CA
+#      keyUsage=digitalSignature     lets the client sign during the TLS handshake
+#      extendedKeyUsage=clientAuth   marks the certificate for client authentication
+openssl req -new -sha256 -key "${CLIENT_KEY}" -out "${CLIENT_CSR}" \
+    -subj "/CN=${CLIENT_NAME}" \
+    -addext "basicConstraints=critical,CA:FALSE" \
+    -addext "keyUsage=critical,digitalSignature" \
+    -addext "extendedKeyUsage=clientAuth"
+
+# 5. Sign the CSR with the CA, copying the requested extensions into the certificate.
+openssl x509 -req -sha256 -in "${CLIENT_CSR}" -out "${CLIENT_CRT}" -days 3650 \
+    -CA "${CA_CRT}" -CAkey "${CA_KEY}" \
+    -copy_extensions copy
+
+# Remove the intermediate CSR.
+rm -f "${CLIENT_CSR}"
+
+# 6. Create a PKCS#12 bundle for browsers.
+openssl pkcs12 -export -out "${CLIENT_P12}" \
+    -inkey "${CLIENT_KEY}" \
+    -in "${CLIENT_CRT}" \
+    -name "${CLIENT_NAME}" \
+    -passout "pass:${CLIENT_PASSWORD}"
+
+# Report the generated files, distinguishing a newly created CA from a reused one.
+if [ "${CA_CREATED}" = true ]; then
+    echo "Created CA: ${CA_CRT}, ${CA_KEY}"
+else
+    echo "Reused existing CA: ${CA_CRT}, ${CA_KEY}"
+fi
+
+if [ -z "${CLIENT_PASSWORD}" ]; then
+    echo "Generated client files: ${CLIENT_KEY}, ${CLIENT_CRT}, ${CLIENT_P12} (no password)"
+else
+    echo "Generated client files: ${CLIENT_KEY}, ${CLIENT_CRT}, ${CLIENT_P12} (with password)"
+fi
+```
+
+</details>
+
+---
+
+### Verify the loaded certificate
+
+The loaded client certificate can be verified using curl<sup>[4](#fn-revoke)</sup>. The CANsub.4 returns `HTTP/1.1 200` and the SHA-256 fingerprint<sup>[5](#fn-sha256-der)</sup> if a certificate is currently loaded.
+
+Replace `[DEVICE-ID]` with the CANsub.4 device ID.
+
+```console
+$ curl --cacert cansub_root_cert.crt --ssl-no-revoke -i -X GET https://[DEVICE-ID]-usb.local/api/client-cert
+
+HTTP/1.1 200
+"fdd181cfe35cfc7a04e2e0554c5c48bd7b10593d3e41c545418756f1316cc2bd"
+```
+
+For comparison, the fingerprint of a certificate file can be calculated using OpenSSL.
+
+Replace `[CERTIFICATE-NAME]` with the base name of the certificate (e.g. `client` or `ca`).
+
+```console
+$ openssl x509 -in [CERTIFICATE-NAME].crt -outform DER | openssl dgst -sha256
+SHA2-256(stdin)= fdd181cfe35cfc7a04e2e0554c5c48bd7b10593d3e41c545418756f1316cc2bd
+```
+
+---
+
+### Remove the certificate
+
+The client certificate can be removed using curl<sup>[4](#fn-revoke)</sup>, which disables mTLS. The CANsub.4 returns `HTTP/1.1 200` if the certificate is successfully removed.
+
+Replace `[DEVICE-ID]` with the CANsub.4 device ID.
+
+```console
+$ curl --cacert cansub_root_cert.crt --ssl-no-revoke -i -X DELETE https://[DEVICE-ID]-usb.local/api/client-cert
+
+HTTP/1.1 200
+```
+
+---
+
+### Test Mutual Authentication
+
+#### NOTE
+The test below does not work on Windows (even with Git Bash): curl cannot load a client certificate from a file.
+
+mTLS can be tested using curl<sup>[4](#fn-revoke)</sup> with the CANsub.4 **connected via Ethernet** (`-eth.local`).
+
+Replace `[DEVICE-ID]` with the CANsub.4 device ID.
+
+GET of the API version **without** a client certificate (**access denied**).
+
+```console
+$ curl --cacert cansub_root_cert.crt --ssl-no-revoke -i -X GET \
+    https://[DEVICE-ID]-eth.local/api/version
+
+curl: (35) OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to [DEVICE-ID]-eth.local:443
+```
+
+The `--cert` argument provides the client certificate as a PKCS#12 bundle (`[CLIENT-NAME].p12`). Replace `[PASSWORD]` with the password entered when the bundle was created.
+
+GET of the API version **with** a client certificate (**access granted**).
+
+```console
+$ curl --cacert cansub_root_cert.crt --ssl-no-revoke -i -X GET \
+    --cert [CLIENT-NAME].p12:[PASSWORD] --cert-type P12 \
+    https://[DEVICE-ID]-eth.local/api/version
+
+HTTP/1.1 200
+"12.34"
+```
+
+---
+* <a id='fn-mtls-persistent'>**[1]**</a> The mTLS configuration is maintained across power cycles.
+* <a id='fn-openssl'>**[2]**</a> Tested with OpenSSL 3.x.
+* <a id='fn-script-is-doc'>**[3]**</a> The OpenSSL commands document the certificate parameters required for the output to be compatible with the CANsub.4.
+* <a id='fn-revoke'>**[4]**</a> The curl commands include `--ssl-no-revoke` for Windows compatibility.
+* <a id='fn-sha256-der'>**[5]**</a> The uploaded `.crt` file is PEM encoded (Base64 text). The fingerprint is the SHA-256 of the same certificate in its DER (binary) encoding.
+
+---
+
+[Time]:
+
+# Time
+
+Accurate time is important for correlating frames across buses, across devices, and with data from other sources. The CANsub.4 maintains its own clock and uses it to timestamp every CAN bus frame (received or transmitted) with a resolution of 1 us (microsecond). The timestamp is applied by the device in hardware and is unaffected by the delay and jitter from the device to the connected client. The same clock is used to achieve accurate transmission scheduling.
+
+The clock is reset on power-up and must be set. Like any clock, it also drifts, so a clock that was set accurately will slowly diverge from true time and from the clocks of other devices. The clock can be set manually through the REST API, or kept synchronized continuously using Precision Time Protocol (PTP). This section covers how frames are timestamped and both ways of setting the time.
+
+> ##### Time topics
+> 
+> * [Timestamping](#timestamping)
+> * [Manual time setting (REST)](#manual-time-setting-rest)
+> * [Automatic time synchronization (PTP)](#automatic-time-synchronization-ptp)
+
+---
+
+## Timestamping
+
+The CANsub.4 timestamps both received and transmitted CAN bus frames in hardware on the start-of-frame (SOF) bit, with a resolution of 1 us. All CAN buses on the device share the same clock, so timestamps from different buses can be compared directly. Received and transmitted frames can likewise be compared directly, since both are timestamped at the same bit, as illustrated below.
+
+![Frames are timestamped at the start-of-frame (SOF) bit, in both directions.](time/timestamp_sof.png)
+
+#### NOTE
+A transmitted frame is timestamped when it actually goes on the bus, after any queued frames and arbitration. The device reports this time to the client in a transmission acknowledgement frame over the [WebSocket](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_ws.html.md#can-frame) (if enabled for the channel).
+
+The table below gives the approximate time a classical CAN frame occupies the bus, including the interframe space and typical stuff bits.
+
+| Frame                   | Bit rate   | Bits   | Time on bus   |
+|-------------------------|------------|--------|---------------|
+| 11-bit ID, 8 data bytes | 250 kbit/s | ~120   | ~0.5 ms       |
+| 11-bit ID, 0 data bytes | 1 Mbit/s   | ~50    | ~50 us        |
+
+A resolution of 1 us is sufficient for CAN bus frames. Even the shortest frame at the highest classical bit rate occupies the bus for tens of microseconds, so consecutive frames on a bus always get distinct timestamps and their order and spacing are preserved.
+
+A resolution of 1 ms is not sufficient. At 1 Mbit/s, around 20 short frames fit within 1 ms and could receive the same timestamp.
+
+---
+
+## Manual time setting (REST)
+
+The device time can be set via the [REST API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest.html.md#device-time). This method is sufficient to ensure that frames from the same device always get distinct timestamps and their order and spacing are preserved.
+
+Setting the time via the REST API has the following limitations:
+
+- The network delay adds an unknown offset between the client clock and the device clock.
+- The client clock and the device clock drift apart over time.
+
+These limitations can become an issue when comparing data between multiple CANsub devices, or with data from another source. The figure below shows a practical test where two CANsub devices, both set via REST, receive the same CAN bus frames.
+
+![The same CAN bus signal timestamped by two CANsub devices. The horizontal shift shows a relative time error of ~1 ms. The error depends on the network and on the time since the clocks were set, and can become considerably larger.](time/time_rest.png)
+
+The same REST endpoint also accepts a clock rate correction. A client that measures how the device clock drifts relative to its own clock can apply this correction to reduce the drift. This allows a rough client-controlled steering of the device clock when [PTP synchronization](#automatic-time-synchronization-ptp) is not an option.
+
+#### NOTE
+Setting the time manually overrides and disables [PTP synchronization](#automatic-time-synchronization-ptp) for the rest of the power cycle.
+
+---
+
+## Automatic time synchronization (PTP)
+
+The device time can be kept synchronized continuously using PTP. Synchronization is enabled by default and starts automatically when a compatible PTP master (network time source) is detected.
+
+See [Precision Time Protocol (PTP)](https://canlogger.csselectronics.com/cansub-docs/cansub4/time/ptp/index.html.md#precision-time-protocol-ptp) for more details on the supported master configuration and the measured performance of a range of deployments.
+
+PTP removes the limitations of setting the time manually:
+
+- The network delay is continuously measured and compensated for.
+- The device clock rate is continuously adjusted to track the master clock.
+
+CANsub devices (and external data sources) synchronized to the same PTP master share a common time, and data can be compared directly. The figure below repeats the test from the previous section, with both devices synchronized via PTP.
+
+![The same CAN bus signal timestamped by two CANsub devices synchronized via PTP, using a dedicated PTP master (TM2000B). The relative error approaches the timestamp resolution.](time/time_ptp.png)
+
+---
+* <a id='fn-ptp-optimal'>**[1]**</a> Measured with a [dedicated hardware master](https://canlogger.csselectronics.com/cansub-docs/cansub4/time/ptp/index.html.md#dedicated-hardware). Other deployments may result in a larger relative error.
+
+---
+
+[Precision Time Protocol (PTP)]:
+
+# Precision Time Protocol (PTP)
+
+Precision Time Protocol (PTP, IEEE 1588) is used for synchronizing clocks on a local network. PTP can reach sub-microsecond accuracy, while Network Time Protocol (NTP) typically achieves millisecond accuracy. The achievable accuracy depends on how well the network, the master and the clients meet the assumptions PTP relies on, see [Performance](#performance).
+
+A PTP *master* provides the time to one or more PTP *clients*. The master can be a dedicated hardware device or a PC running PTP software.
+
+The CANsub.4 acts as a PTP client and synchronizes by default to a PTP master via either Ethernet or USB. The device selects the first compatible master it detects<sup>[1](#fn-first-master)</sup> and then continuously tracks its time. Time errors above 100 ms are corrected by stepping the clock, smaller errors by adjusting the clock rate. The state of the synchronization can be read via the [REST API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest.html.md#device-time-ptp-status) and is shown on the [display](https://canlogger.csselectronics.com/cansub-docs/cansub4/hardware/display.html.md#display) while tracking.
+
+#### NOTE
+Setting the time manually via the REST API overrides and disables PTP synchronization for the rest of the power cycle. A power cycle or reboot re-enables it.
+
+> ##### PTP topics
+> 
+> * [Supported master configuration](#supported-master-configuration)
+> * [Performance](#performance)
+> * [Troubleshooting](#troubleshooting)
+
+---
+
+## Supported master configuration
+
+#### Supported PTP master configuration. Recommended in bold.
+
+| Configuration                                         | Supported                                            |
+|-------------------------------------------------------|------------------------------------------------------|
+| Version                                               | 2.0 or **2.1**                                       |
+| Profile                                               | Default IEEE 1588 (`majorSdoId` 0)                   |
+| Transport                                             | IPv4 UDP                                             |
+| Addressing                                            | Multicast only (224.0.1.129, port 319/320)           |
+| Delay mechanism                                       | End-to-End (E2E)                                     |
+| Step mode                                             | **One-step**<sup>[2](#fn-one-step)</sup> or two-step |
+| Announce interval                                     | Any (**1 (2 s)** recommended)                        |
+| Sync interval (`logSyncInterval`)                     | -1 (500 ms), **0 (1 s)**, 1 (2 s)                    |
+| Min delay request interval (`logMinDelayReqInterval`) | At or below `logSyncInterval`                        |
+| Timescale                                             | TAI or UTC                                           |
+| UTC offset                                            | TAI: 37 required, UTC: ignored                       |
+| Domain number                                         | 0                                                    |
+| TLVs                                                  | A message carrying a TLV is discarded                |
+
+#### NOTE
+PTP over IPv4 UDP uses port 319 for event messages and port 320 for general messages. A PC running the PTP master must allow UDP traffic on both ports in both directions.
+
+---
+
+## Performance
+
+The CANsub.4 detects a PTP master within one Announce interval (typically 2 s) and starts tracking within 10 to 20 s (with a Sync interval of 1 s). The PTP state can be read via the [REST API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest.html.md#device-time-ptp-status)<sup>[5](#fn-ptp-status-browser)</sup>.
+
+The achievable time synchronization accuracy depends on how well the following PTP assumptions hold:
+
+1. Network packets are accurately timestamped
+2. Network delay is symmetric (the same in both directions)
+3. Network delay does not change significantly between packets
+
+The examples below demonstrate the achievable time synchronization accuracy in various scenarios. For each, the relative accuracy is evaluated by comparing the timestamps of two CANsub devices connected to the same CAN bus (one transmits, one receives).
+
+### Dedicated hardware
+
+A dedicated PTP master is able to timestamp network packets accurately (assumption 1) and can typically provide high absolute time accuracy based on an external source (such as GPS).
+
+An example network with a dedicated PTP master is illustrated below.
+
+```mermaid
+flowchart LR
+    GPS(["External time source<br>(e.g. GPS)"])
+    GPS --> M["PTP master<br>(hardware timestamping)"]
+    M --- SW["Ethernet switch"]
+    SW --- D1["CANsub 1"]
+    SW --- D2["CANsub 2"]
+    SW --- DN["CANsub N"]
+```
+
+PTP over Ethernet. Dedicated master with hardware timestamping, synchronized to GPS.
+
+Measurements show that the relative error (between two devices) approaches the timestamp resolution of 1 us.
+
+![Relative timestamp error between two CANsub devices before (red) and after (green) PTP tracking. Dedicated master (TM2000B) over Ethernet.](time/ptp/ptp_performance/ptp_eth_hw.png)
+
+---
+
+### Software using ptp4l
+
+A PC running a PTP master software tool typically timestamps network packets less accurately than a dedicated master and uses a less accurate external time source (such as NTP).
+
+An example network with a Linux PC running the PTP for Linux (`ptp4l`) software tool<sup>[3](#fn-ptp4l-linux)</sup> is illustrated below.
+
+```mermaid
+flowchart LR
+    NTP(["External time source<br>(NTP)"])
+    NTP --> M["PC running ptp4l<br>(software timestamping)"]
+    M --- SW["Ethernet switch /<br>USB hub"]
+    SW --- D1["CANsub 1"]
+    SW --- D2["CANsub 2"]
+    SW --- DN["CANsub N"]
+```
+
+PTP over Ethernet or USB. `ptp4l` master with software timestamping, synchronized to NTP.
+
+Measurements show that the relative error (between two devices) stays within tens of microseconds via both Ethernet and USB.
+
+![Relative timestamp error between two CANsub devices before (red) and after (green) PTP tracking. ptp4l master over Ethernet.](time/ptp/ptp_performance/ptp_eth_sw.png)![Relative timestamp error between two CANsub devices before (red) and after (green) PTP tracking. ptp4l master over USB.](time/ptp/ptp_performance/ptp_usb_sw.png)
+
+The `ptp4l` tool (package name `linuxptp`) can be started as in the following examples:
+
+Example: ptp4l master on one Ethernet interface.
+
+```bash
+sudo ptp4l -S -4 -m -i eth1
+```
+
+Example: ptp4l master on two USB interfaces (a USB interface only exists while the device is plugged in).
+
+```bash
+sudo ptp4l -S -4 -m -i enx0200aabbccdd -i enx0200aabbccee
+```
+
+#### NOTE
+See [Discovery](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/discovery.html.md#discovery) for information on how to find device and network interface names.
+
+#### NOTE
+Firewalls commonly block PTP traffic by default. UDP ports 319 and 320 must be open in both directions.
+
+---
+
+## Troubleshooting
+
+The [PTP status endpoint](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest.html.md#device-time-ptp-status)<sup>[5](#fn-ptp-status-browser)</sup> is useful for troubleshooting.
+
+**Master is not found**
+
+- The master Announce message is incompatible, see [Supported master configuration](#supported-master-configuration).
+- The master Announce message is blocked from reaching the device (UDP port 320).
+- The master and the device are not on the same network segment. PTP multicast is not forwarded between networks, including virtual networks (e.g. WSL or Docker)<sup>[4](#fn-virtual-net)</sup>.
+- A network device filters multicast packets between the master and the device (e.g. a managed switch or firewall).
+
+**Master is found but the device is not tracking**
+
+- The master Sync message is incompatible, see [Supported master configuration](#supported-master-configuration).
+- The master Sync message (UDP port 319) or Delay Response message (UDP port 320) is blocked from reaching the device.
+- The device Delay Request message is blocked from reaching the master (UDP port 319).
+- The master clock rate differs from the device clock rate by more than 200 ppm.
+- The master was replaced after the device selected it. The device keeps the first master for the rest of the power cycle, so reboot the device after moving the master to another PC, interface, or hardware unit.
+
+**Tracking is lost**
+
+- The master Sync message has stopped.
+- The master clock has jumped by more than 100 ms (the device resynchronizes).
+
+**PTP is disabled**
+
+- The device time was set manually, disabling PTP for the rest of the power cycle. Reboot the device.
+
+---
+* <a id='fn-first-master'>**[1]**</a> The selected master is kept for the rest of the power cycle.
+* <a id='fn-one-step'>**[2]**</a> One-step requires hardware timestamping support in the master. Software masters use two-step.
+* <a id='fn-ptp4l-linux'>**[3]**</a> `ptp4l` is available for Linux only. No equivalent PTP master software is known for Windows.
+* <a id='fn-virtual-net'>**[4]**</a> Virtual machines and containers can typically be configured to share the network of the host, which allows PTP multicast to reach the device.
+* <a id='fn-ptp-status-browser'>**[5]**</a> The PTP status endpoint can be opened directly in a browser, e.g. `https://aabbccdd-eth.local/api/time/ptp` or `https://aabbccdd-usb.local/api/time/ptp`.
+
+---
+
+[Hardware]:
+
+# Hardware
+
+This section contains information on the CANsub.4 hardware.
+
+---
+
+[Connectors]:
+
+# Connectors
+
+The CANsub.4 has the following physical connectors.
+
+---
+
+## USB and RJ45
+
+The CANsub.4 uses a USB-C port for power. Data can be transferred using either the USB-C port or the RJ45 Ethernet port (see [Connectivity](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/index.html.md#connectivity)).
+
+![The USB-C port is located to the right. The RJ45 port is located to the left.](hardware/connector/cansub_power_data.png)
+
+---
+
+## CAN bus
+
+#### WARNING
+The isolated ground pin of each channel must be connected to the ground of the CAN bus attached to that channel.
+
+The CANsub.4 uses one DB25 port for the four galvanically isolated CAN buses.
+
+![The pins associated with each bus are grouped as indicated by the dashed lines. Yellow: CAN-H Green: CAN-L Black: Isolated GND (ground).](hardware/connector/cansub4_buses.png)
+
+#### CANsub.4 DB25 pinout.
+
+| Channel      | Function   |   Pin # |
+|--------------|------------|---------|
+| CH1          | CAN-H      |      12 |
+| CAN-L        | 13         |         |
+| Isolated GND | 25         |         |
+| CH2          | CAN-H      |      22 |
+| CAN-L        | 21         |         |
+| Isolated GND | 9          |         |
+| CH3          | CAN-H      |      18 |
+| CAN-L        | 17         |         |
+| Isolated GND | 5          |         |
+| CH4          | CAN-H      |       1 |
+| CAN-L        | 2          |         |
+| Isolated GND | 14         |         |
+
+#### NOTE
+The DB25 connector shield is connected to the device metal enclosure. Avoid connecting it to the isolated buses.
+
+---
+
+[Display]:
+
+# Display
+
+The CANsub.4 features a 0.96” color LCD display showing the current device state. The display switches between several *layouts* depending on the state of the device.
+
+The display uses the following symbols:
+
+| ![image](hardware/display/symbol-spinner-solid.png)           | Pending connection.                                                                                                       |
+|---------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| ![image](hardware/display/symbol-usb-brands-solid.png)        | USB connection active (network over USB).                                                                                 |
+| ![image](hardware/display/symbol-ethernet-solid.png)          | Ethernet connection active (network over Ethernet).                                                                       |
+| ![image](hardware/display/symbol-arrow-up-solid.png)          | Network uplink activity.                                                                                                  |
+| ![image](hardware/display/symbol-arrow-down-solid.png)        | Network downlink activity.                                                                                                |
+| ![image](hardware/display/symbol-clock-rotate-left-solid.png) | [PTP](https://canlogger.csselectronics.com/cansub-docs/cansub4/time/index.html.md#automatic-time-synchronization-ptp) time synchronization is *tracking*. |
+
+---
+
+## Top bar
+
+The top bar is persistent and shown regardless of the active layout. It provides the following information:
+
+- Device time (format `DD/MM HH:MM:SS`).
+- State of connector detection (pending/USB/Ethernet).
+- Network uplink/downlink activity.
+- State of PTP time tracking.
+
+---
+
+## Information layout
+
+The *information* layout can be activated by pressing the button under the USB-C connector<sup>[1](#fn-info-button)</sup>. The information layout provides the following information:
+
+- `TYP`: Device type (CANsub.4).
+- `ID`: Unique device ID (8-digit hexadecimal value).
+- `HW`: Hardware version.
+- `FW`: Firmware version.
+- `API`: API version.
+- `MAC`: Unique device MAC address (same for USB and Ethernet).
+
+| ![Device info button.](hardware/display/cansub_button.png)   | ![Device info layout.](hardware/display/cansub4_display_inf.bmp)   |
+|--------------------------------------------------------------|--------------------------------------------------------------------|
+
+---
+
+## Connection layout
+
+The *connection* layout is displayed until the network connection is established (USB or Ethernet selected and IP address assigned).
+
+`Detecting inf` (interface) remains empty until either USB or Ethernet is selected for data transfer (see [Connectivity](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/index.html.md#connectivity)).
+
+![Detecting connection.](hardware/display/cansub_display_itf.bmp)
+
+`Detecting net` (network) remains empty until an IP address is obtained.
+
+| ![USB detected. Waiting for IP.](hardware/display/cansub_display_itf_usb.bmp)   | ![Ethernet detected. Waiting for IP.](hardware/display/cansub_display_itf_eth.bmp)   |
+|---------------------------------------------------------------------------------|--------------------------------------------------------------------------------------|
+
+---
+
+## Network layout
+
+The *network* layout is displayed once the device network is ready and until a client has connected to the device.
+
+| ![Network layout, USB (example hostname & IP).](hardware/display/cansub_display_net_usb.bmp)   | ![Network layout, Ethernet (example hostname & IP).](hardware/display/cansub_display_net_eth.bmp)   |
+|------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+
+#### NOTE
+If connecting to the device through a browser, prefix the hostname or IP with `https://`.
+
+Examples:
+
+- `https://aabbccdd-usb.local` / `https://aabbccdd-eth.local`
+- `https://10.121.15.1`
+
+The hostname depends on the active interface (USB/Ethernet).
+
+---
+
+## CAN bus layout
+
+The *CAN bus* layout is displayed once a client connects to the CANsub.4. The layout shows information on all CAN channels.
+
+![CAN bus layout example.](hardware/display/cansub4_display_can.bmp)
+
+The example above displays the following bus information:
+
+- **CAN1**: Nominal bit rate: 250k, data bit rate: 1M, 312 frames/s.
+- **CAN2**: Nominal bit rate: 500k, data bit rate: 1M, 552 frames/s, error-passive.
+- **CAN3**: Nominal bit rate: 1M, data bit rate: 2M, 725 frames/s, silent mode.
+- **CAN4**: Nominal bit rate: 1M, data bit rate: 4M, 1446 frames/s, silent mode.
+
+### Bus state
+
+![CAN1 stopped (gray).](hardware/display/cansub_display_can_stopped.bmp)![CAN1 active (green) with 123 frames/s.](hardware/display/cansub_display_can_active.bmp)![CAN1 error-passive (orange) with 123 frames/s.](hardware/display/cansub_display_can_passive.bmp)![CAN1 bus-off (red).](hardware/display/cansub_display_can_busoff.bmp)![CAN1 active (green) in silent mode (S) with 123 frames/s.](hardware/display/cansub_display_can_silent.bmp)
+
+### Bus load
+
+The bar below each channel shows the bus load in percent.
+
+![Examples of bus load bars.](hardware/display/cansub_display_can_bar.png)
+
+---
+* <a id='fn-info-button'>**[1]**</a> Use a pointed, non-conductive tool to activate the button.
+
+---
+
+[Enclosure]:
+
+# Enclosure
+
+The CANsub.4 uses a robust aluminum enclosure with mounting flanges.
+
+![image](hardware/enclosure/cansub_enclosure.png)
+
+[`Drawing (PDF)`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/425d2fdcc9939556e4b31ae8f2138a24/cansub4_drawing.pdf) | [`3D model (STEP)`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/2c8297a34eeb03dc7592adf76def2c83/cansub4_3d.zip)
+
+#### WARNING
+Opening the enclosure can permanently damage the device. Improper handling may void the warranty.
+
+---
+
+[Label]:
+
+# Label
+
+A unique label is attached to each device. An example label is shown below.
+
+![image](hardware/label/cansub_label.png)
+
+The label contains the following information:
+
+- `ID`: Unique device ID (8-digit hexadecimal value).
+- `HW`: Hardware version (`XX.YY`).
+- `DC`: Production date code (`YYYYMM`).
+- `QR`: Production date code, device ID, and device MAC (`YYYYMM;[DEVICE-ID];[DEVICE-MAC]`).
+
+#### NOTE
+The QR code can be scanned to obtain the device MAC address.
+
+---
+
+[API]:
+
+# API
+
+The CANsub.4 has an open API based on easily accessible technologies to encourage users to create 3rd-party integrations. The API enables full control of the device.
+
+#### NOTE
+Firmware 02.05.00 uses API version 05.00.
+
+The following diagram illustrates the CANsub stack, including the *API* layer. The built-in *webCAN* tool exclusively uses the open API.
+
+![CANsub stack. webCAN is included in the CANsub device. python-can support is provided by a separate package. CANsub stack](api/stack.png)
+<!-- Mermaid source for the figure above. Rendered manually at https://mermaid.live
+and exported to stack.png. The Sphinx mermaid-cli PNG output renders this
+block-beta diagram excessively wide, so it is checked in as an image instead.
+Re-export stack.png when editing this diagram. -->
+<!-- block-beta
+    columns 5
+
+    app_layer["Application"]:1 app_group["webCAN / python-can / 3rd-party"]:4
+    api_layer["API"]:1 rest["REST API"]:2 ws["WebSocket API"]:2
+    hw_layer["Hardware"]:1 hw["CAN bus"]:4
+
+    style app_layer fill:#FFFFFF,stroke:#FFFFFF
+    style api_layer fill:#FFFFFF,stroke:#FFFFFF
+    style hw_layer  fill:#FFFFFF,stroke:#FFFFFF
+
+    style app_group fill:#FF9900,stroke:#FFFFFF
+    style rest      fill:#FF9900,stroke:#FFFFFF
+    style ws        fill:#FF9900,stroke:#FFFFFF
+    style hw        fill:#FF9900,stroke:#FFFFFF -->
+
+The API is split into a [REST API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest.html.md#rest-api) for configuration and state monitoring, and a [WebSocket API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_ws.html.md#websocket-api)<sup>[1](#fn-websocket)</sup> for live data transfer (CAN bus data). The API is located under `/api`.
+
+#### NOTE
+mDNS can be used for device detection, see [Discovery](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/discovery.html.md#discovery).
+
+#### NOTE
+For implementation inspiration, see the source code of the [python-can-cansub package](https://github.com/CSS-Electronics/python-can-cansub).
+
+---
+
+## Usage
+
+A typical integration follows this flow:
+
+```mermaid
+flowchart LR
+init["1. Initialize"] --> configure
+subgraph channels ["For each channel"]
+    configure["2. Configure channel"] --> open["3. Open channel"]
+    open --> service["4. Communicate"]
+    service --> close["5. Close channel"]
+end
+```
+
+1. **Initialize**  *(once)*: Verify the API version and set the device time if needed (REST)
+2. **Configure channel**  *(per channel)*: Configure the CAN channel (REST)
+3. **Open channel**: Connect the WebSocket to open the CAN channel (WebSocket)<sup>[2](#fn-websocket-client)</sup>
+4. **Communicate**: Communicate with the CAN bus (WebSocket) and monitor states (REST)
+5. **Close channel**: Disconnect the WebSocket to close the CAN channel (WebSocket)
+
+For more details, see [REST API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest.html.md#rest-api) and [WebSocket API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_ws.html.md#websocket-api). See [Closing the connection](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_ws.html.md#closing-the-connection) for the recommended close sequence.
+
+---
+* <a id='fn-websocket'>**[1]**</a> WebSocket is chosen over a raw TCP socket to make the API web-friendly.
+* <a id='fn-websocket-client'>**[2]**</a> Only a single client can be connected to the WebSocket of each channel.
+* <a id='fn-python-can'>**[3]**</a> python-can support is provided through the [python-can-cansub](https://pypi.org/project/python-can-cansub/) package.
+
+---
+
+[REST API]:
+
+# REST API
+
+The REST API is used for device configuration and state monitoring. The REST API is located under `https://[HOSTNAME].local/api` (e.g. `https://aabbccdd-usb.local/api`).
+
+#### NOTE
+CAN bus frames are transferred via the [WebSocket API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_ws.html.md#websocket-api). A CAN bus is opened by connecting the WebSocket and closed by disconnecting the WebSocket.
+
+---
+
+### TLS
+
+The REST API uses TLS. The CANsub root certificate can be downloaded below.
+
+[`Download CANsub root certificate`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/c09c84fa360e0930c50285fffb35c76f/cansub_root_cert.crt)
+<br/>
+`SHA-256 fingerprint = D064C85905195400216A11BB50D754865ED2B5F997D36A9EA2EA97883B15D0F1`
+<br/>
+
+---
+
+### OpenAPI
+
+The REST API is described by the *OpenAPI* file below.
+
+[`CANsub OpenAPI description`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/4a3e03d1a36cd461061b9dfaa58ddec7/openapi.json)
+<br/>
+
+The *OpenAPI Generator* project ([openapi-generator.tech](https://openapi-generator.tech/)) can be used to generate interfaces for most programming languages.
+
+---
+
+The API endpoints are described in detail below.
+
+The API endpoints can be explored using the [REST API playground](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest_playground.html.md#rest-api-playground).
+
+> ##### API endpoint overview
+> 
+> * [API version](#api-version)
+> * [Device info](#device-info)
+> * [Device time](#device-time)
+> * [Device time PTP status](#device-time-ptp-status)
+> * [Device reboot](#device-reboot)
+> * [Client certificate](#client-certificate)
+> * [CAN channel list](#can-channel-list)
+> * [CAN {channel} status](#can-channel-status)
+> * [CAN {channel} physical](#can-channel-physical)
+> * [CAN {channel} filter](#can-channel-filter)
+> * [CAN {channel} filter {filter_id}](#can-channel-filter-filter-id)
+> * [CAN {channel} transmit](#can-channel-transmit)
+> * [CAN {channel} transmit {transmit_id}](#can-channel-transmit-transmit-id)
+> * [CAN {channel} transmit {transmit_id} count](#can-channel-transmit-transmit-id-count)
+> * [CAN {channel} WebSocket](#can-channel-websocket)
+
+---
+
+## API version
+
+Provides the version of the API. The version follows the format `MAJOR.MINOR`. Clients should start by reading the API version to ensure compatibility.
+
+### GET /api/version
+
+**Get API version**
+
+Returns the current version of the REST API.
+
+**Example request:**
+
+```http
+GET /api/version HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    API Version.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: text/plain
+
+    01.23
+    ```
+
+The version value has the following format.
+
+| type   | *string*   |
+|--------|------------|
+
+---
+
+## Device info
+
+Provides general device information.
+
+### GET /api/info
+
+**Get device information**
+
+Returns general device information.
+
+**Example request:**
+
+```http
+GET /api/info HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    Device information.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    {
+        "id": "aabbccdd",
+        "hw_ver": "01.02",
+        "fw_ver": "01.02.03",
+        "mac": "001122334455",
+        "usb": "04D8&E487"
+    }
+    ```
+
+The response has the following format.
+
+| type         | *object*                                     |
+|--------------|----------------------------------------------|
+| properties   |                                              |
+| - **id**     | Device ID as an 8-digit hexadecimal value.   |
+| type         | *string*                                     |
+| - **hw_ver** | Hardware version with format “xx.yy”.        |
+| type         | *string*                                     |
+| - **fw_ver** | Firmware version with format “xx.yy.zz”.     |
+| type         | *string*                                     |
+| - **mac**    | MAC address as a 12-digit hexadecimal value. |
+| type         | *string*                                     |
+| - **usb**    | USB VID & PID with format “XXXX&YYYY”.       |
+| type         | *string*                                     |
+
+---
+
+## Device time
+
+Read (GET) or set (PUT) the device time (wall-clock time) and the clock rate correction. The device time needs to be set for the device to be able to correctly timestamp CAN bus frames, see [Time](https://canlogger.csselectronics.com/cansub-docs/cansub4/time/index.html.md#time).
+
+The rate correction adjusts how fast the device clock runs, in parts per billion. It allows a client with a known estimate of the device clock error to compensate for drift. Use `0` when no correction is known.
+
+#### NOTE
+The time is reset on power cycles and is shared across all CAN channels.
+
+#### NOTE
+Setting the time overrides and disables [PTP synchronization](https://canlogger.csselectronics.com/cansub-docs/cansub4/time/index.html.md#automatic-time-synchronization-ptp) for the rest of the power cycle.
+
+### GET /api/time
+
+**Get device time**
+
+Returns the current device time and the clock rate correction currently applied.
+
+**Example request:**
+
+```http
+GET /api/time HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    Current device time and rate correction.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    {
+        "utc": "2025-01-01T00:00:00.000Z",
+        "rate_ppb": 0
+    }
+    ```
+
+### PUT /api/time
+
+**Set device time**
+
+Sets the device time and the clock rate correction. Overrides and disables time synchronization for the rest of the power cycle.
+
+**Example request:**
+
+```http
+PUT /api/time HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+{
+    "utc": "2025-01-01T00:00:00.000Z",
+    "rate_ppb": 0
+}
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – Device time set successfully.
+  * [400 Bad Request](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/400) – Bad request (invalid object, unsupported time format, or time or rate outside the supported range).
+
+The time value (GET response and PUT request body) has the following format.
+
+| type           | *object*                                                                                                                                                                                      |
+|----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| properties     |                                                                                                                                                                                               |
+| - **utc**      | Device time as an RFC3339/ISO-8601 UTC timestamp string, format YYYY-MM-DDTHH:MM:SS.sssZ. Must be 2025-01-01T00:00:00.000Z or later.                                                          |
+| type           | *string*                                                                                                                                                                                      |
+| format         | date-time                                                                                                                                                                                     |
+| - **rate_ppb** | Clock rate correction applied to the device time, in parts per billion. Positive when the device clock is being sped up, i.e. it would otherwise run slow. Use 0 when no correction is known. |
+| type           | *integer*                                                                                                                                                                                     |
+| maximum        | 200000                                                                                                                                                                                        |
+| minimum        | -200000                                                                                                                                                                                       |
+
+---
+
+## Device time PTP status
+
+Returns the status of the [PTP time synchronization](https://canlogger.csselectronics.com/cansub-docs/cansub4/time/index.html.md#automatic-time-synchronization-ptp). PTP synchronization is enabled by default and runs without configuration when a compatible PTP master is present on the network, see [Precision Time Protocol (PTP)](https://canlogger.csselectronics.com/cansub-docs/cansub4/time/ptp/index.html.md#precision-time-protocol-ptp).
+
+The `state` value reports whether the device is following a master. `offset_ns` is the clock error measured at the latest synchronization exchange and is only meaningful in the `tracking` state.
+
+### GET /api/time/ptp
+
+**Get PTP status**
+
+Returns the status of the PTP (IEEE 1588) time synchronization.
+
+**Example request:**
+
+```http
+GET /api/time/ptp HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    PTP status.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    {
+        "master": "a1a2a3a4a5a6a7a8",
+        "state": "tracking",
+        "offset_ns": -1500
+    }
+    ```
+
+The status has the following format.
+
+| type            | *object*                                                                                                                                                                               |
+|-----------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| properties      |                                                                                                                                                                                        |
+| - **master**    | Clock identity of the PTP master being followed, or null when no master has been detected or synchronization is disabled.                                                              |
+| type            | *string*                                                                                                                                                                               |
+| - **state**     | Synchronization state. Disabled: Permanently disabled. Idle: No synchronization information is being received. Initializing: Preparing for tracking. Tracking: Tracking external time. |
+| type            | *string*                                                                                                                                                                               |
+| enum            | disabled, idle, initializing, tracking                                                                                                                                                 |
+| - **offset_ns** | Clock error at the latest measurement, in nanoseconds (positive when the device clock is ahead of the master). Zero when not in the tracking state.                                    |
+| type            | *integer*                                                                                                                                                                              |
+
+---
+
+## Device reboot
+
+Reboot (POST) the device. The response is sent before the reboot, after which all connections are closed while the device restarts.
+
+#### NOTE
+A reboot resets the device state like a power cycle, e.g. the [Device time](#device-time) must be set again.
+
+### POST /api/reboot
+
+**Reboot device**
+
+Reboots the device. All active WebSocket connections are closed.
+
+* **Status Codes:**
+  * [202 Accepted](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/202) – Reboot initiated.
+
+---
+
+## Client certificate
+
+Manages the client certificate used as the trust anchor for [TLS Mutual Authentication (mTLS)](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/security/mtls.html.md#tls-mutual-authentication-mtls). Upload (PUT) a certificate to enable mTLS, read (GET) the SHA-256 fingerprint of the loaded certificate, or remove (DELETE) the certificate to disable mTLS.
+
+### GET /api/client-cert
+
+**Get client certificate identifier**
+
+Returns the SHA-256 fingerprint of the DER-encoded client certificate currently loaded as the trust anchor for TLS mutual authentication.
+
+**Example request:**
+
+```http
+GET /api/client-cert HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    SHA-256 fingerprint of the loaded client certificate as a 64-digit hexadecimal value.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+    ```
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – No client certificate loaded (mutual authentication disabled).
+
+### PUT /api/client-cert
+
+**Upload client certificate**
+
+Uploads the client public certificate (PEM format) used as the trust anchor for TLS mutual authentication, replacing any existing certificate.
+
+**Example request:**
+
+```http
+PUT /api/client-cert HTTP/1.1
+Host: example.com
+Content-Type: application/x-pem-file
+
+-----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – Certificate stored. Mutual authentication enabled.
+  * [400 Bad Request](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/400) – Bad request (not a valid X.509 certificate).
+  * [413 Request Entity Too Large](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/413) – Payload too large.
+
+### DELETE /api/client-cert
+
+**Remove client certificate**
+
+Removes the stored client certificate, disabling TLS mutual authentication.
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – Certificate removed. Mutual authentication disabled.
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – No client certificate loaded.
+
+The GET response (SHA-256 fingerprint) has the following format.
+
+| type      | *string*       |
+|-----------|----------------|
+| maxLength | 64             |
+| minLength | 64             |
+| pattern   | ^[0-9a-f]{64}$ |
+
+---
+
+## CAN channel list
+
+Returns a list of supported physical CAN channels. The channel *indexes* are used to access channel-specific endpoints (`{channel}`).
+
+### GET /api/can
+
+**List available CAN channels**
+
+Returns a list of supported CAN channels.
+
+**Example request:**
+
+```http
+GET /api/can HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    List of CAN channels.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    [
+        1,
+        2,
+        3,
+        4
+    ]
+    ```
+
+---
+
+## CAN {channel} status
+
+Returns the status of a specific CAN channel.
+
+### GET /api/can/{channel}
+
+**Get status of CAN channel**
+
+Returns the current status of the CAN channel.
+
+* **Parameters:**
+  * **channel** (*integer*)
+
+**Example request:**
+
+```http
+GET /api/can/{channel} HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    CAN channel status.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    {
+        "state": "stopped",
+        "frame_count": 0,
+        "frame_rate": 0,
+        "bus_load": 0,
+        "rx_error_count": 0,
+        "tx_error_count": 0,
+        "bus_error_count": 0
+    }
+    ```
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – CAN channel not found.
+
+The status has the following format.
+
+| type                  | *object*                                                     |
+|-----------------------|--------------------------------------------------------------|
+| properties            |                                                              |
+| - **state**           | CAN controller state.                                        |
+| type                  | *string*                                                     |
+| enum                  | error_active, error_warning, error_passive, bus_off, stopped |
+| - **frame_count**     | Frame counter.                                               |
+| type                  | *integer*                                                    |
+| - **frame_rate**      | Frame rate in frames per second.                             |
+| type                  | *integer*                                                    |
+| minimum               | 0                                                            |
+| - **bus_load**        | Bus load (0-100%).                                           |
+| type                  | *integer*                                                    |
+| maximum               | 100                                                          |
+| minimum               | 0                                                            |
+| - **rx_error_count**  | Receive error counter.                                       |
+| type                  | *integer*                                                    |
+| maximum               | 128                                                          |
+| minimum               | 0                                                            |
+| - **tx_error_count**  | Transmit error counter.                                      |
+| type                  | *integer*                                                    |
+| maximum               | 256                                                          |
+| minimum               | 0                                                            |
+| - **bus_error_count** | Bus error counter.                                           |
+| type                  | *integer*                                                    |
+| minimum               | 0                                                            |
+
+---
+
+## CAN {channel} physical
+
+Read (GET) or set (PUT) the *physical* parameters of a specific CAN channel.
+
+See the [bit-timing list](https://canlogger.csselectronics.com/cansub-docs/cansub4/bit_timing.html.md#bit-timing) for valid bit-timing configurations.
+
+### GET /api/can/{channel}/phy
+
+**Get CAN channel PHY configuration**
+
+Returns CAN channel PHY configuration.
+
+* **Parameters:**
+  * **channel** (*integer*)
+
+**Example request:**
+
+```http
+GET /api/can/{channel}/phy HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    PHY configuration returned.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    {
+        "listen_only": false,
+        "auto_reset": true,
+        "error_frames": false,
+        "tx_ack_frames": true,
+        "timing": {
+            "brp": 4,
+            "seg1": 63,
+            "seg2": 16,
+            "sjw": 4
+        },
+        "timing_data": {
+            "brp": 4,
+            "seg1": 15,
+            "seg2": 4,
+            "sjw": 4
+        }
+    }
+    ```
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – CAN channel not found.
+
+### PUT /api/can/{channel}/phy
+
+**Set CAN channel PHY configuration**
+
+Sets CAN channel PHY configuration.
+
+* **Parameters:**
+  * **channel** (*integer*)
+
+**Example request:**
+
+```http
+PUT /api/can/{channel}/phy HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+{
+    "listen_only": false,
+    "auto_reset": true,
+    "error_frames": false,
+    "tx_ack_frames": true,
+    "timing": {
+        "brp": 4,
+        "seg1": 63,
+        "seg2": 16,
+        "sjw": 4
+    },
+    "timing_data": {
+        "brp": 4,
+        "seg1": 15,
+        "seg2": 4,
+        "sjw": 4
+    }
+}
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – PHY configuration applied.
+  * [400 Bad Request](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/400) – Bad request (invalid JSON).
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – CAN channel not found.
+
+The configuration has the following format.
+
+| type                | *object*                                                                                                                                                                                       |
+|---------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| properties          |                                                                                                                                                                                                |
+| - **listen_only**   | Enables listen-only mode.                                                                                                                                                                      |
+| type                | *boolean*                                                                                                                                                                                      |
+| - **auto_reset**    | Enables automatic bus-off recovery.                                                                                                                                                            |
+| type                | *boolean*                                                                                                                                                                                      |
+| - **error_frames**  | Enables monitoring of error frames (bus error, stuffing error, etc.).                                                                                                                          |
+| type                | *boolean*                                                                                                                                                                                      |
+| - **tx_ack_frames** | Enables transmission acknowledgements. When enabled, an acknowledgement is sent to the client via the WebSocket for each successfully transmitted frame. Disabling reduces network data usage. |
+| type                | *boolean*                                                                                                                                                                                      |
+| - **timing**        | Nominal bit timing.                                                                                                                                                                            |
+| allOf               | type                                                                                                                                                                                           |
+| properties          |                                                                                                                                                                                                |
+| - **brp**           | Baud Rate Prescaler.                                                                                                                                                                           |
+| type                | *integer*                                                                                                                                                                                      |
+| minimum             | 1                                                                                                                                                                                              |
+| - **seg1**          | Phase Segment 1.                                                                                                                                                                               |
+| type                | *integer*                                                                                                                                                                                      |
+| minimum             | 1                                                                                                                                                                                              |
+| - **seg2**          | Phase Segment 2.                                                                                                                                                                               |
+| type                | *integer*                                                                                                                                                                                      |
+| minimum             | 1                                                                                                                                                                                              |
+| - **sjw**           | Synchronization Jump Width.                                                                                                                                                                    |
+| type                | *integer*                                                                                                                                                                                      |
+| minimum             | 1                                                                                                                                                                                              |
+| - **timing_data**   | Data phase bit timing (for CAN-FD).                                                                                                                                                            |
+| allOf               | type                                                                                                                                                                                           |
+| properties          |                                                                                                                                                                                                |
+| - **brp**           | Baud Rate Prescaler.                                                                                                                                                                           |
+| type                | *integer*                                                                                                                                                                                      |
+| minimum             | 1                                                                                                                                                                                              |
+| - **seg1**          | Phase Segment 1.                                                                                                                                                                               |
+| type                | *integer*                                                                                                                                                                                      |
+| minimum             | 1                                                                                                                                                                                              |
+| - **seg2**          | Phase Segment 2.                                                                                                                                                                               |
+| type                | *integer*                                                                                                                                                                                      |
+| minimum             | 1                                                                                                                                                                                              |
+| - **sjw**           | Synchronization Jump Width.                                                                                                                                                                    |
+| type                | *integer*                                                                                                                                                                                      |
+| minimum             | 1                                                                                                                                                                                              |
+
+---
+
+## CAN {channel} filter
+
+List (GET) and create (POST) hardware acceptance filters of a specific CAN channel. By default, the device has two filters accepting all standard and extended frame IDs. If all filters are removed, no frames are accepted. When a new filter is created, the ID is returned via the *Location* header field.
+
+#### NOTE
+Hardware filters can be used to reduce network load.
+
+### GET /api/can/{channel}/filter
+
+**List active receive filters**
+
+Returns a list of IDs for all currently active receive filters.
+
+* **Parameters:**
+  * **channel** (*integer*)
+
+**Example request:**
+
+```http
+GET /api/can/{channel}/filter HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    List of filter IDs.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    [
+        1
+    ]
+    ```
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – CAN channel not found.
+
+### POST /api/can/{channel}/filter
+
+**Create new receive filter**
+
+Creates a new receive filter.
+
+* **Parameters:**
+  * **channel** (*integer*)
+
+**Example request:**
+
+```http
+POST /api/can/{channel}/filter HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+{
+    "label": "Optional filter label",
+    "is_extended": false,
+    "is_range": false,
+    "f1": 0,
+    "f2": 0
+}
+```
+
+* **Status Codes:**
+  * [201 Created](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/201) – Filter created successfully.
+  * [400 Bad Request](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/400) – Bad request (invalid JSON).
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – CAN channel not found.
+  * [503 Service Unavailable](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/503) – Service unavailable (e.g., no more space for filters).
+* **Response Headers:**
+  * **Location** – URI of the newly created filter.
+
+A filter has the following format.
+
+| type              | *object*                                                            |
+|-------------------|---------------------------------------------------------------------|
+| properties        |                                                                     |
+| - label           | Optional user-defined label.                                        |
+| type              | *string*                                                            |
+| maxLength         | 32                                                                  |
+| - **is_extended** | True for an extended (29-bit) ID, false for a standard (11-bit) ID. |
+| type              | *boolean*                                                           |
+| - **is_range**    | True if the filter is a range filter, false if it is a mask filter. |
+| type              | *boolean*                                                           |
+| - **f1**          | When is_range=false: filter ID. When is_range=true: range start.    |
+| type              | *integer*                                                           |
+| maximum           | 4294967295                                                          |
+| minimum           | 0                                                                   |
+| - **f2**          | When is_range=false: filter mask. When is_range=true: range end.    |
+| type              | *integer*                                                           |
+| maximum           | 4294967295                                                          |
+| minimum           | 0                                                                   |
+
+---
+
+## CAN {channel} filter {filter_id}
+
+Read (GET) or remove (DELETE) a filter of a specific CAN channel by ID.
+
+### GET /api/can/{channel}/filter/{filter_id}
+
+**Get filter**
+
+Returns receive filter details by ID.
+
+* **Parameters:**
+  * **channel** (*integer*)
+  * **filter_id** (*integer*)
+
+**Example request:**
+
+```http
+GET /api/can/{channel}/filter/{filter_id} HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    Filter details.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    {
+        "label": "Optional filter label",
+        "is_extended": false,
+        "is_range": false,
+        "f1": 0,
+        "f2": 0
+    }
+    ```
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – Filter not found.
+
+### DELETE /api/can/{channel}/filter/{filter_id}
+
+**Delete filter**
+
+Removes a receive filter by ID.
+
+* **Parameters:**
+  * **channel** (*integer*)
+  * **filter_id** (*integer*)
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – Filter deleted successfully.
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – Filter not found.
+
+A filter has the following format.
+
+| type              | *object*                                                            |
+|-------------------|---------------------------------------------------------------------|
+| properties        |                                                                     |
+| - label           | Optional user-defined label.                                        |
+| type              | *string*                                                            |
+| maxLength         | 32                                                                  |
+| - **is_extended** | True for an extended (29-bit) ID, false for a standard (11-bit) ID. |
+| type              | *boolean*                                                           |
+| - **is_range**    | True if the filter is a range filter, false if it is a mask filter. |
+| type              | *boolean*                                                           |
+| - **f1**          | When is_range=false: filter ID. When is_range=true: range start.    |
+| type              | *integer*                                                           |
+| maximum           | 4294967295                                                          |
+| minimum           | 0                                                                   |
+| - **f2**          | When is_range=false: filter mask. When is_range=true: range end.    |
+| type              | *integer*                                                           |
+| maximum           | 4294967295                                                          |
+| minimum           | 0                                                                   |
+
+---
+
+## CAN {channel} transmit
+
+Transmission sequences are transmission *jobs* submitted to the device, allowing for hardware-controlled high-precision transmissions (even on high-latency networks). A transmission sequence contains a list of CAN frames to transmit and a set of parameters to control the transmission (see the parameter descriptions below).
+
+List (GET) and create (POST) transmission sequences of a specific CAN channel. A new transmission sequence is created with `count` set to `limit`. Update the `count` value (e.g. to zero) to start the transmission sequence. When a transmission sequence is created, the ID is returned via the *Location* header field.
+
+### GET /api/can/{channel}/transmit
+
+**List transmit sequences**
+
+Returns a list of IDs for existing transmit sequences.
+
+* **Parameters:**
+  * **channel** (*integer*)
+
+**Example request:**
+
+```http
+GET /api/can/{channel}/transmit HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    List of transmit IDs.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    [
+        1
+    ]
+    ```
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – CAN channel not found.
+
+### POST /api/can/{channel}/transmit
+
+**Create new transmit sequence**
+
+Creates a new transmit sequence.
+
+* **Parameters:**
+  * **channel** (*integer*)
+
+**Example request:**
+
+```http
+POST /api/can/{channel}/transmit HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+{
+    "label": "Optional transmit label",
+    "limit": 10,
+    "period_ms": 1000,
+    "spacing_ms": 1,
+    "frames": [
+        {
+            "label": "Optional frame label",
+            "is_extended": false,
+            "is_fd": false,
+            "is_rtr_brs": false,
+            "id": 1,
+            "data": "01020304"
+        }
+    ]
+}
+```
+
+* **Status Codes:**
+  * [201 Created](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/201) – Transmit sequence created.
+  * [400 Bad Request](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/400) – Bad request (invalid JSON).
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – CAN channel not found.
+  * [503 Service Unavailable](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/503) – Service unavailable (e.g., no more space for transmit sequences).
+* **Response Headers:**
+  * **Location** – URI of the newly created transmit sequence.
+
+A transmission sequence has the following format.
+
+| type              | *object*                                                                                                            |
+|-------------------|---------------------------------------------------------------------------------------------------------------------|
+| properties        |                                                                                                                     |
+| - label           | Optional user-defined label.                                                                                        |
+| type              | *string*                                                                                                            |
+| maxLength         | 32                                                                                                                  |
+| - **limit**       | Maximum number of times to transmit the sequence.                                                                   |
+| type              | *integer*                                                                                                           |
+| maximum           | 4294967294                                                                                                          |
+| minimum           | 1                                                                                                                   |
+| - **period_ms**   | Period of the full sequence in milliseconds.                                                                        |
+| type              | *integer*                                                                                                           |
+| minimum           | 1                                                                                                                   |
+| - **spacing_ms**  | Spacing between individual frames in the sequence in milliseconds.                                                  |
+| type              | *integer*                                                                                                           |
+| minimum           | 1                                                                                                                   |
+| - **frames**      | type                                                                                                                |
+| items             | type                                                                                                                |
+| properties        |                                                                                                                     |
+| - label           | Optional user-defined label.                                                                                        |
+| type              | *string*                                                                                                            |
+| maxLength         | 32                                                                                                                  |
+| - **is_extended** | True for an extended (29-bit) ID, false for a standard (11-bit) ID.                                                 |
+| type              | *boolean*                                                                                                           |
+| - **is_fd**       | True for a CAN FD frame, false for a classic CAN frame.                                                             |
+| type              | *boolean*                                                                                                           |
+| - **is_rtr_brs**  | RTR for classic CAN, BRS (Bit Rate Switch) for CAN-FD.                                                              |
+| type              | *boolean*                                                                                                           |
+| - **id**          | Frame identifier.                                                                                                   |
+| type              | *integer*                                                                                                           |
+| maximum           | 4294967295                                                                                                          |
+| minimum           | 0                                                                                                                   |
+| - **data**        | Hexadecimal encoded data payload. Empty string for no data bytes. For RTR frames, dummy bytes set the frame length. |
+| type              | *string*                                                                                                            |
+| maxLength         | 128                                                                                                                 |
+| pattern           | ^[0-9a-fA-F]\*$                                                                                                     |
+
+---
+
+## CAN {channel} transmit {transmit_id}
+
+Read (GET) or remove (DELETE) a transmission sequence of a specific CAN channel by ID.
+
+### GET /api/can/{channel}/transmit/{transmit_id}
+
+**Get transmit sequence by ID**
+
+Returns a transmit sequence by ID.
+
+* **Parameters:**
+  * **channel** (*integer*)
+  * **transmit_id** (*integer*)
+
+**Example request:**
+
+```http
+GET /api/can/{channel}/transmit/{transmit_id} HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    Transmit sequence details.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    {
+        "label": "Optional transmit label",
+        "limit": 10,
+        "period_ms": 1000,
+        "spacing_ms": 1,
+        "frames": [
+            {
+                "label": "Optional frame label",
+                "is_extended": false,
+                "is_fd": false,
+                "is_rtr_brs": false,
+                "id": 1,
+                "data": "01020304"
+            }
+        ]
+    }
+    ```
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – Transmit sequence not found.
+
+### DELETE /api/can/{channel}/transmit/{transmit_id}
+
+**Delete transmit sequence**
+
+Deletes a transmit sequence by ID.
+
+* **Parameters:**
+  * **channel** (*integer*)
+  * **transmit_id** (*integer*)
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – Transmit sequence deleted.
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – Transmit sequence not found.
+
+A transmission sequence has the following format.
+
+| type              | *object*                                                                                                            |
+|-------------------|---------------------------------------------------------------------------------------------------------------------|
+| properties        |                                                                                                                     |
+| - label           | Optional user-defined label.                                                                                        |
+| type              | *string*                                                                                                            |
+| maxLength         | 32                                                                                                                  |
+| - **limit**       | Maximum number of times to transmit the sequence.                                                                   |
+| type              | *integer*                                                                                                           |
+| maximum           | 4294967294                                                                                                          |
+| minimum           | 1                                                                                                                   |
+| - **period_ms**   | Period of the full sequence in milliseconds.                                                                        |
+| type              | *integer*                                                                                                           |
+| minimum           | 1                                                                                                                   |
+| - **spacing_ms**  | Spacing between individual frames in the sequence in milliseconds.                                                  |
+| type              | *integer*                                                                                                           |
+| minimum           | 1                                                                                                                   |
+| - **frames**      | type                                                                                                                |
+| items             | type                                                                                                                |
+| properties        |                                                                                                                     |
+| - label           | Optional user-defined label.                                                                                        |
+| type              | *string*                                                                                                            |
+| maxLength         | 32                                                                                                                  |
+| - **is_extended** | True for an extended (29-bit) ID, false for a standard (11-bit) ID.                                                 |
+| type              | *boolean*                                                                                                           |
+| - **is_fd**       | True for a CAN FD frame, false for a classic CAN frame.                                                             |
+| type              | *boolean*                                                                                                           |
+| - **is_rtr_brs**  | RTR for classic CAN, BRS (Bit Rate Switch) for CAN-FD.                                                              |
+| type              | *boolean*                                                                                                           |
+| - **id**          | Frame identifier.                                                                                                   |
+| type              | *integer*                                                                                                           |
+| maximum           | 4294967295                                                                                                          |
+| minimum           | 0                                                                                                                   |
+| - **data**        | Hexadecimal encoded data payload. Empty string for no data bytes. For RTR frames, dummy bytes set the frame length. |
+| type              | *string*                                                                                                            |
+| maxLength         | 128                                                                                                                 |
+| pattern           | ^[0-9a-fA-F]\*$                                                                                                     |
+
+---
+
+## CAN {channel} transmit {transmit_id} count
+
+Read (GET) or write (PUT) the `count` value of a transmission sequence of a specific CAN channel by ID. The `count` value expresses the *progress* of a transmission sequence.
+
+#### NOTE
+The `count` value `0xFFFFFFFF` is reserved for errors (the transmission sequence failed to complete).
+
+### GET /api/can/{channel}/transmit/{transmit_id}/count
+
+**Get transmit sequence count**
+
+Returns the current count value of the transmit sequence.
+
+* **Parameters:**
+  * **channel** (*integer*)
+  * **transmit_id** (*integer*)
+
+**Example request:**
+
+```http
+GET /api/can/{channel}/transmit/{transmit_id}/count HTTP/1.1
+Host: example.com
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – 
+
+    Current count value.
+
+    **Example response:**
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    10
+    ```
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – Transmit sequence not found.
+
+### PUT /api/can/{channel}/transmit/{transmit_id}/count
+
+**Update transmit sequence count**
+
+Updates the count value of an existing transmit sequence.
+
+* **Parameters:**
+  * **channel** (*integer*)
+  * **transmit_id** (*integer*)
+
+**Example request:**
+
+```http
+PUT /api/can/{channel}/transmit/{transmit_id}/count HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+10
+```
+
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – Transmit sequence count updated.
+  * [400 Bad Request](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/400) – Bad request (invalid count value/format).
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – Transmit sequence not found.
+
+The GET response has the following format.
+
+|         | Valid count range (0xFFFFFFFF is the error value).   |
+|---------|------------------------------------------------------|
+| type    | *integer*                                            |
+| maximum | 4294967295                                           |
+| minimum | 0                                                    |
+
+The PUT request body has the following format.
+
+|         | Valid count range (the 0xFFFFFFFF error value is excluded).   |
+|---------|---------------------------------------------------------------|
+| type    | *integer*                                                     |
+| maximum | 4294967294                                                    |
+| minimum | 0                                                             |
+
+---
+
+## CAN {channel} WebSocket
+
+Abort (DELETE) the WebSocket connection of a specific CAN channel. See [Closing the connection](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_ws.html.md#closing-the-connection) for the recommended close sequence.
+
+### DELETE /api/can/{channel}/ws
+
+**Abort CAN channel WebSocket connection**
+
+Aborts the channel WebSocket connection. Queued data is discarded (not transmitted on the CAN bus), allowing the connection to close even when the bus cannot transmit the queued data.
+
+* **Parameters:**
+  * **channel** (*integer*)
+* **Status Codes:**
+  * [200 OK](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/200) – WebSocket connection abort requested.
+  * [404 Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) – No active WebSocket connection on the channel.
+
+#### NOTE
+CAN bus frames are transferred via the WebSocket connection itself, see the [WebSocket API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_ws.html.md#websocket-api).
+
+---
+
+[WebSocket API]:
+
+# WebSocket API
+
+The WebSocket API is used to transfer CAN bus frames between the connected client and the CANsub.4.
+
+This page uses the term *frame* in three distinct contexts:
+
+- **CAN frame**: A CAN bus frame.
+- **HDLC frame**: A delimited binary container for boundary detection and integrity verification.
+- **Network frame**: A network-layer data frame.
+
+#### NOTE
+Device configuration and state monitoring are done via the [REST API](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest.html.md#rest-api).
+
+---
+
+## WebSocket usage
+
+The `/api/can/{channel}/ws` endpoints (one for each physical channel) accept WebSocket upgrades. Only one client can be connected to each WebSocket at a time. Live data is transferred using WebSocket **binary messages**. The format of the binary data is described below.
+
+**Connecting a WebSocket opens the associated CAN bus (channel) on the device. Disconnecting closes the channel** (see [Closing the connection](#closing-the-connection)).
+
+The connection is bidirectional:
+
+- **CANsub → Client**: the CANsub sends received CAN frames, CAN transmission acknowledgements, and CAN error frames.
+- **Client → CANsub**: the client sends CAN frames to be transmitted on a physical CAN bus.
+
+### Receive
+
+Receiving data from the WebSocket is illustrated (simplified) below. Reception follows these steps (explained in more detail below):
+
+1. Read bytes from the WebSocket until a start and an end boundary byte are found.
+2. Perform byte destuffing and remove boundary bytes.
+3. Validate CRC32.
+4. Deserialize CAN frames until no bytes remain (a payload can contain one or more CAN frames).
+
+```mermaid
+flowchart LR
+    ws[Read WebSocket] -->|"0x7E...0x7E" | destuf["Destuff"]
+    destuf -->|"CRC OK" | deserial["Deserialize"]
+```
+
+### Transmit
+
+Transmitting data to the WebSocket is illustrated (simplified) below. Transmission follows these steps (explained in more detail below):
+
+1. Serialize CAN frames (one or more).
+2. Calculate CRC32.
+3. Perform byte stuffing and add boundary bytes.
+4. Write bytes to the WebSocket<sup>[1](#fn-websocket-max)</sup>.
+
+```mermaid
+flowchart LR
+    serialize["Serialize"] --> crc["Calculate CRC32"] --> stuf["Stuff"] --> ws["Write WebSocket"]
+```
+
+---
+
+## Closing the connection
+
+A WebSocket connection is closed by sending a WebSocket close message to the CANsub.4. When the CANsub.4 receives the WebSocket close message, it performs the following steps:
+
+1. Completes queued CAN frame transmissions (without a timeout)
+2. Closes the CAN bus
+3. Confirms the WebSocket close message
+
+The client can abort step 1 by sending a [DELETE request](https://canlogger.csselectronics.com/cansub-docs/cansub4/api/api_rest.html.md#can-channel-websocket) to the WebSocket endpoint `/api/can/{channel}/ws`. The CANsub.4 then discards the queued CAN frames and completes the close immediately. The DELETE request can be used as a client-controlled timeout for step 1.
+
+```mermaid
+flowchart LR
+    subgraph queue["TCP queue"]
+        direction LR
+        close["WS close"] --> canb["CAN frame"] --> cana["CAN frame"]
+    end
+    dev["Device"]
+    cana --> dev
+
+    style cana fill:#FF9900,stroke:#FFFFFF
+    style canb fill:#FF9900,stroke:#FFFFFF
+```
+
+A `DELETE` request discards the queued CAN frames (orange), such that the CANsub.4 reads the WebSocket close frame immediately.
+
+### Recommended close sequence
+
+1. Send a WebSocket close message.
+2. Await close confirmation.
+3. If no confirmation arrives within a (client-controlled) timeout period, issue a DELETE request and await the confirmation, which should now arrive immediately.
+
+#### NOTE
+Use the WebSocket close handshake when closing the connection. Avoid closing the TCP connection directly.
+
+---
+
+## HDLC frame
+
+Each HDLC frame carries one or more serialized CAN frames. HDLC framing provides boundary detection, payload integrity verification, and byte-stuffing.
+
+#### HDLC frame structure.
+
+| Boundary byte   | Payload           | CRC32   | Boundary byte   |
+|-----------------|-------------------|---------|-----------------|
+| `0x7E`          | N bytes (stuffed) | 4 B     | `0x7E`          |
+- `0x7E` marks the start and end of each HDLC frame.
+- *payload*: one or more serialized CAN frames concatenated (see [CAN frame]()).
+- *CRC32*: IEEE 802.3 CRC32 (polynomial `0xEDB88320`) computed over the raw (unstuffed) payload bytes, appended in big-endian byte order.
+- Byte-stuffing is applied to all bytes between the boundary bytes (payload + CRC32 bytes).
+
+### Byte-stuffing
+
+Byte-stuffing ensures that the boundary byte (`0x7E`) does not appear in the HDLC frame body. Before transmission, every payload and CRC32 byte is stuffed.
+
+#### Byte-stuffing substitutions.
+
+| Original   | Encoded sequence   |
+|------------|--------------------|
+| `0x7E`     | `0x7D` `0x5E`      |
+| `0x7D`     | `0x7D` `0x5D`      |
+
+The escape byte `0x7D` is always followed by the original byte XOR `0x20`. On decoding, each `0x7D` causes the next byte to be XOR-ed with `0x20` to recover the original value.
+
+---
+
+## CAN frame
+
+CAN bus frames are serialized as specified below.
+
+#### `CB`: Classical-Base, `CE`: Classical-Extended, `FB`: FD-Base, `FE`: FD-Extended, `ER`: Error.
+
+|     |           |        |     |     |     |     |        |    |    |    |    |    |    |   Byte |   0-5 |   6 |   7 | 8   | 9   | 10   |
+|-----|-----------|--------|-----|-----|-----|-----|--------|----|----|----|----|----|----|--------|-------|-----|-----|-----|-----|------|
+| Bit | 47-0      | 7      | 6   | 5   | 4   | 3   | 2      |  1 |  0 | 7  |  6 | 5  | 4  |      3 |     2 |   1 |   0 | 7-0 | 7-0 | 7-0  |
+| CB  | TIMESTAMP | FDF(0) | RTR | 0   | TX  | DLC | IDE(0) |  0 |  0 | 0  |  0 | ID | -  |        |       |     |     |     |     |      |
+| CE  | TIMESTAMP | FDF(0) | RTR | 0   | TX  | DLC | IDE(1) |  0 |  0 | ID |    |    |    |        |       |     |     |     |     |      |
+| FB  | TIMESTAMP | FDF(1) | BRS | ESI | TX  | DLC | IDE(0) |  0 |  0 | 0  |  0 | ID | -  |        |       |     |     |     |     |      |
+| FE  | TIMESTAMP | FDF(1) | BRS | ESI | TX  | DLC | IDE(1) |  0 |  0 | ID |    |    |    |        |       |     |     |     |     |      |
+| ER  | TIMESTAMP | 0      | 0   | 1   | ERR | -   |        |    |    |    |    |    |    |        |       |     |     |     |     |      |
+- `TIMESTAMP`: Timestamp in microseconds since 2025-01-01 00:00:00 UTC (offset: 1735689600000000 us)
+- `FDF`: FD Format Indicator
+- `RTR`: Remote Transmission Request
+- `BRS`: Bit Rate Switch
+- `ESI`: Error State Indicator
+- `TX`: Transmission Acknowledgement
+- `DLC`: Data Length Code
+- `IDE`: Identifier Extension
+- `ID`:  Identifier
+- `ERR`: Error type
+  > - `0`: Bit (bit 0 or bit 1)
+  > - `1`: Ack
+  > - `2`: Form
+  > - `3`: Stuff
+  > - `4`: CRC
+
+---
+
+## Test vectors
+
+The test vectors below can be used for validation of custom implementations of the WebSocket API.
+
+---
+
+### TV-01
+
+One network frame, one HDLC frame, one CAN frame. Standard identifier.
+
+#### Network frame(s)
+
+|   # | DATA                                              |
+|-----|---------------------------------------------------|
+|   1 | `7E 1C AE 8C 13 E0 00 01 07 FF 00 98 4F D1 B8 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2026-01-01 00:00:00 | 0x7FF |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `00`   |
+
+---
+
+### TV-02
+
+One network frame, one HDLC frame, one CAN frame. Extended identifier.
+
+#### Network frame(s)
+
+|   # | DATA                                                    |
+|-----|---------------------------------------------------------|
+|   1 | `7E 39 5D 18 27 C0 00 01 9F FF FF FF 00 82 83 9F 92 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID         |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|------------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2027-01-01 00:00:00 | 0x1FFFFFFF |     1 |     0 |     0 |     0 |     0 |    0 |     1 | `00`   |
+
+---
+
+### TV-03
+
+One network frame, one HDLC frame, one CAN frame. Remote frame.
+
+#### Network frame(s)
+
+|   # | DATA                                           |
+|-----|------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 48 00 01 EF 87 F8 40 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     1 |     0 |     0 |    0 |     8 |        |
+
+---
+
+### TV-04
+
+One network frame, one HDLC frame, one CAN frame. FD frame.
+
+#### Network frame(s)
+
+|   # | DATA                                              |
+|-----|---------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 81 00 01 00 AF 74 88 69 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     1 |     0 |     0 |     0 |    0 |     1 | `00`   |
+
+---
+
+### TV-05
+
+One network frame, one HDLC frame, one CAN frame. FD frame with BRS.
+
+#### Network frame(s)
+
+|   # | DATA                                              |
+|-----|---------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 C1 00 01 00 34 60 D0 54 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     1 |     0 |     1 |     0 |    0 |     1 | `00`   |
+
+---
+
+### TV-06
+
+One network frame, one HDLC frame, one CAN frame. FD frame with ESI.
+
+#### Network frame(s)
+
+|   # | DATA                                              |
+|-----|---------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 A1 00 01 00 0F 46 27 57 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     1 |     0 |     0 |     1 |    0 |     1 | `00`   |
+
+---
+
+### TV-07
+
+One network frame, one HDLC frame, one CAN frame. FD frame with 64 bytes of data.
+
+#### Network frame(s)
+
+|   # | DATA                                                                                                                                                                                                                                           |
+|-----|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 8F 00 01 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F 20 21 22 23 24 25 26 27 28 29 2A 2B 2C 2D 2E 2F 30 31 32 33 34 35 36 37 38 39 3A 3B 3C 3D 3E 3F DE 43 31 51 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA                                                                                                                                                                                              |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     1 |     0 |     0 |     0 |    0 |    64 | `00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F 20 21 22 23 24 25 26 27 28 29 2A 2B 2C 2D 2E 2F 30 31 32 33 34 35 36 37 38 39 3A 3B 3C 3D 3E 3F` |
+
+---
+
+### TV-08
+
+One network frame, one HDLC frame, one CAN frame. TX acknowledgement.
+
+#### Network frame(s)
+
+|   # | DATA                                              |
+|-----|---------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 11 00 01 00 12 34 69 CD 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    1 |     1 | `00`   |
+
+---
+
+### TV-09
+
+One network frame, one HDLC frame, one CAN frame.
+
+#### Network frame(s)
+
+|   # | DATA                                              |
+|-----|---------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 01 00 01 00 42 2D 3E 52 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `00`   |
+
+---
+
+### TV-10
+
+Multiple network frames, one HDLC frame, one CAN frame.
+
+#### Network frame(s)
+
+|   # | DATA                |
+|-----|---------------------|
+|   1 | `7E`                |
+|   2 | `00 00 00 00 00 00` |
+|   3 | `01`                |
+|   4 | `00 01`             |
+|   5 | `00`                |
+|   6 | `42 2D 3E 52`       |
+|   7 | `7E`                |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `00`   |
+
+---
+
+### TV-11
+
+One network frame, one HDLC frame, multiple CAN frames.
+
+#### Network frame(s)
+
+|   # | DATA                                                                                                                                        |
+|-----|---------------------------------------------------------------------------------------------------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 01 00 01 01 00 00 00 00 00 00 01 00 02 02 00 00 00 00 00 00 01 00 03 03 00 00 00 00 00 00 01 00 04 04 D1 2C 1F D9 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `01`   |
+|   2 | 2025-01-01 00:00:00 | 0x002 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `02`   |
+|   3 | 2025-01-01 00:00:00 | 0x003 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `03`   |
+|   4 | 2025-01-01 00:00:00 | 0x004 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `04`   |
+
+---
+
+### TV-12
+
+One network frame, multiple HDLC frames with one CAN frame in each.
+
+#### Network frame(s)
+
+|   # | DATA                                                                                                                                                                                              |
+|-----|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 01 00 01 01 35 2A 0E C4 7E 7E 00 00 00 00 00 00 01 00 02 02 87 0E 0C BD 7E 7E 00 00 00 00 00 00 01 00 03 03 E9 12 0D 6A 7E 7E 00 00 00 00 00 00 01 00 04 04 38 37 0E 0E 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `01`   |
+|   2 | 2025-01-01 00:00:00 | 0x002 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `02`   |
+|   3 | 2025-01-01 00:00:00 | 0x003 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `03`   |
+|   4 | 2025-01-01 00:00:00 | 0x004 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `04`   |
+
+---
+
+### TV-13
+
+One network frame with garbage bytes before one HDLC frame with one CAN frame.
+
+#### Network frame(s)
+
+|   # | DATA                                                             |
+|-----|------------------------------------------------------------------|
+|   1 | `01 02 03 04 05 7E 00 00 00 00 00 00 01 00 01 00 42 2D 3E 52 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `00`   |
+
+---
+
+### TV-14
+
+One network frame with garbage bytes between two HDLC frames each with one CAN frame.
+
+#### Network frame(s)
+
+|   # | DATA                                                                                                             |
+|-----|------------------------------------------------------------------------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 01 00 01 01 35 2A 0E C4 7E 01 02 03 04 05 7E 00 00 00 00 00 00 01 00 02 02 87 0E 0C BD 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `01`   |
+|   2 | 2025-01-01 00:00:00 | 0x002 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `02`   |
+
+---
+
+### TV-15
+
+One network frame with 3 HDLC frames each with one CAN frame. Checksum of HDLC frame 2/3 is invalid.
+
+#### Network frame(s)
+
+|   # | DATA                                                                                                                                              |
+|-----|---------------------------------------------------------------------------------------------------------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 01 00 01 01 35 2A 0E C4 7E 7E 00 00 00 00 00 00 01 00 02 02 00 00 00 00 7E 7E 00 00 00 00 00 00 01 00 03 03 E9 12 0D 6A 7E` |
+
+Error decoding frame Frame CRC32 mismatch
+.. table:: CAN frame(s)
+
+> |   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+> |-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+> |   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `01`   |
+> |   2 | 2025-01-01 00:00:00 | 0x003 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `03`   |
+
+---
+
+### TV-16
+
+One network frame, one HDLC frame, one CAN frame. CAN frame data contains HDLC reserved bytes.
+
+#### Network frame(s)
+
+|   # | DATA                                                                                           |
+|-----|------------------------------------------------------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 08 00 01 7D 5E 7D 5E 7D 5E 7D 5E 7D 5D 7D 5D 7D 5D 7D 5D 67 49 97 08 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA                      |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|---------------------------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     8 | `7E 7E 7E 7E 7D 7D 7D 7D` |
+
+---
+
+### TV-17
+
+One network frame, one HDLC frame, one CAN frame. HDLC checksum contains HDLC reserved bytes.
+
+#### Network frame(s)
+
+|   # | DATA                                                    |
+|-----|---------------------------------------------------------|
+|   1 | `7E 00 00 00 00 2A D1 01 00 01 01 27 88 7D 5E 7D 5D 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `01`   |
+
+---
+
+### TV-18
+
+One network frame. One HDLC frame with one valid CAN frame and one CAN frame missing a data byte. Next HDLC frame contains a valid CAN frame.
+
+#### Network frame(s)
+
+|   # | DATA                                                                                                                            |
+|-----|---------------------------------------------------------------------------------------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 01 00 01 01 00 00 00 00 00 00 02 00 02 02 BE C0 22 71 7E 7E 00 00 00 00 00 00 01 00 03 03 E9 12 0D 6A 7E` |
+
+Error decoding message Not enough data bytes for payload
+.. table:: CAN frame(s)
+
+> |   # | Timestamp           | ID    |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+> |-----|---------------------|-------|-------|-------|-------|-------|-------|------|-------|--------|
+> |   1 | 2025-01-01 00:00:00 | 0x001 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `01`   |
+> |   2 | 2025-01-01 00:00:00 | 0x003 |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `03`   |
+
+---
+
+### TV-19
+
+Two network frames. First containing one HDLC frame with one CAN frame (error frame). Second containing one HDLC frame with one CAN frame (regular).
+
+#### Network frame(s)
+
+|   # | DATA                                              |
+|-----|---------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 20 A6 02 FF B6 7E`          |
+|   2 | `7E 00 00 00 00 00 00 01 00 01 00 42 2D 3E 52 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID        |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-----------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | BIT ERROR |       |       |       |       |       |      |       |        |
+|   2 | 2025-01-01 00:00:00 | 0x001     |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `00`   |
+
+---
+
+### TV-20
+
+One network frame with one HDLC frame with one CAN frame (error) and one CAN frame (regular).
+
+#### Network frame(s)
+
+|   # | DATA                                                                   |
+|-----|------------------------------------------------------------------------|
+|   1 | `7E 00 00 00 00 00 00 20 00 00 00 00 00 00 01 00 01 00 EE D4 28 4E 7E` |
+
+#### CAN frame(s)
+
+|   # | Timestamp           | ID        |   IDE |   FDF |   RTR |   BRS |   ESI |   TX |   DLC | DATA   |
+|-----|---------------------|-----------|-------|-------|-------|-------|-------|------|-------|--------|
+|   1 | 2025-01-01 00:00:00 | BIT ERROR |       |       |       |       |       |      |       |        |
+|   2 | 2025-01-01 00:00:00 | 0x001     |     0 |     0 |     0 |     0 |     0 |    0 |     1 | `00`   |
+
+---
+* <a id='fn-websocket-max'>**[1]**</a> HDLC frames should not exceed one Ethernet frame (~1400 bytes).
+
+---
+
+[Firmware]:
+
+# Firmware
+
+The firmware of the CANsub.4 can be updated directly from a browser.
+
+#### WARNING
+A firmware update clears persistent device data (such as a configured mTLS certificate).
+
+---
+
+## Firmware update steps
+
+1. Download and unzip the new firmware (see firmware files below).
+2. Connect the CANsub.4 to a PC using a USB-C cable<sup>[1](#fn-update-via-ethernet)</sup>.
+3. Open the firmware update page in a browser<sup>[2](#fn-url)</sup>:
+   ```text
+   https://[DEVICE-ID]-usb.local/firmware
+   ```
+4. Follow the steps on the page to update the firmware.
+
+---
+
+## Firmware files
+
+* [Firmware-02.05.00.zip](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/b9b13101e1cbc853a5cb6a4f5b143ce6/firmware-02.05.00.zip)
+* [Firmware-02.04.00.zip](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/3a21ecc2553adf830fc1c9fdc87fae63/firmware-02.04.00.zip)
+* [Firmware-02.03.00.zip](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/82c8f65de9cc9287f38f78910bf5865d/firmware-02.03.00.zip)
+* [Firmware-02.02.00.zip](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/8bb9ddf3827a3bdee6291ee061bf58ab/firmware-02.02.00.zip)
+* [Firmware-02.01.00.zip](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/ca02460ef3de3bc4cafec28288ac65a4/firmware-02.01.00.zip)
+* [Firmware-02.00.00.zip](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/c7936c06a412631165d6f4fc116caef2/firmware-02.00.00.zip)
+
+---
+
+## Changelog
+
+```markdown
+# Change Log
+All notable changes to CANsub firmware will be documented in this file.
+
+Types of changes:
+- "Added": New features
+- "Changed": Changes to existing functionality
+- "Fixed": Bug fixes
+- "Known issues": Known issues
+- "Warning": Warnings
+
+## [FW: 02.05.00, API: 05.00] - 2026-09-24
+
+### Warning
+- API version updated to 05.00
+
+### Added
+- Support for time synchronization via Precision Time Protocol (PTP, IEEE 1588) over Ethernet and USB
+- REST endpoint /api/time/ptp added, returning the PTP synchronization status
+- Time sync icon on the display when tracking PTP master
+
+### Changed
+- USB network interface host-side MAC address derived from the device ID instead of a fixed address
+- REST endpoint /api/time changed to take and return an object (UTC time and rate correction)
+
+## [FW: 02.04.00, API: 04.00] - 2026-08-17
+
+### Warning
+- API version updated to 04.00
+
+### Added
+- Device reboot endpoint /api/reboot added
+- WebSocket queue discard via DELETE /api/can/{channel}/ws, see documentation for details
+- Parameter tx_ack_frames added to /api/can/{channel}/phy for controlling TX acknowledgements via the WebSocket
+
+### Changed
+- WebSocket graceful shutdown procedure changed, see documentation for details
+
+## [FW: 02.03.00, API: 03.00] - 2026-07-01
+
+### Warning
+- API version updated to 03.00
+
+### Added
+- Support for TLS Mutual Authentication (mTLS) over the Ethernet connection
+- Optional labels (strings) added to REST API endpoints for filters and transmit-sequences
+
+### Changed
+- API version updated from 02.00 to 03.00
+- CAN TX ACK timestamps now sampled at SOF, matching RX timestamps
+
+## [FW: 02.02.00, API: 02.00] - 2026-06-02
+
+### Added
+- Device variant, hardware version and firmware version added to USB descriptor (product)
+
+### Fixed
+- Issue with transmitted messages not included in the bus-load calculation fixed
+- Issue with CORS preflight requests fixed
+- Issue with parsing of json payloads containing white spaces fixed
+
+## [FW: 02.01.00, API: 02.00] - 2026-05-21
+
+### Added
+- Device-ID to USB descriptor (serial)
+- Device network discoverability via mDNS
+
+### Known issues
+- Transmitted messages are not included in the bus-load calculation
+- Issue with CORS preflight requests
+- Issue with parsing of json payloads containing white spaces
+
+## [FW: 02.00.00, API: 02.00] - 2026-05-18
+
+### Added
+- Initial release
+
+### Known issues
+- Transmitted messages are not included in the bus-load calculation
+```
+
+---
+
+## Versioning & naming
+
+The firmware version follows semantic versioning (`MAJOR.MINOR.PATCH`).
+
+* `MAJOR`: Breaking changes
+* `MINOR`: Backward-compatible changes
+* `PATCH`: Backward-compatible fixes
+
+---
+* <a id='fn-update-via-ethernet'>**[1]**</a> Firmware update is also possible over Ethernet. Navigate to `https://[DEVICE-ID]-eth.local/firmware`.
+* <a id='fn-url'>**[2]**</a> The device URL can be found on the display.
+
+---
+
+[Legal information]:
+
+# Legal information
+
+## Usage warning
+
+#### WARNING
+Review before connecting the device to a live CAN bus.
+
+The use of the CANsub.4 must be done with caution and an understanding of the risks involved. The operation of the device may be dangerous as it can affect the operation and behavior of a CAN bus system.
+
+Improper installation or use can lead to serious malfunction, loss of data, equipment damage, or physical injury. When connected to a CAN bus controlled system, the device can potentially cause unintended operational changes, including activating or deactivating modules and functions.
+
+The device should only be used by persons who are qualified, understand the risks and understand how the device interacts with the system in which it is integrated.
+
+---
+
+## Terms & conditions
+
+Please refer to our general [terms & conditions](https://www.csselectronics.com/policies/terms-of-service).
+
+---
+
+## Electromagnetic compatibility
+
+The CANsub has been tested in accordance with CE, FCC and IC standards.
+
+[`CE DoC`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/88403567857bc69314f61c7e75a7dfcc/cansub4_doc.pdf) |
+[`CE certificate`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/9a0adceecb29dbb46fd83bd1a79ebc14/cansub_ce_certificate.pdf) |
+[`FCC certificate`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/d80d14d837870c484be08bb0f615d29d/cansub_fcc_certificate.pdf) |
+[`IC certificate`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/88aa3af9fdd882ff045baf509e4ab4a1/cansub_ic_certificate.pdf)
+
+---
+
+## Contact details
+
+For any questions regarding our products, please contact us:
+
+CSS Electronics
+<br/>
+EU VAT ID: DK36711949
+<br/>
+Soeren Frichs Vej 38K (Office 35), 8230 Aabyhoej, Denmark
+<br/>
+contact[AT]csselectronics.com
+<br/>
++45 91252563
+<br/>
+[www.csselectronics.com](https://www.csselectronics.com)
+<br/>
+
+---
+
+[Bit-timing]:
+
+# Bit-timing
+
+The table below lists bit-timing configurations suitable for the CANsub.4 (running an 80 MHz CAN clock).
+
+#### Bit-timing configurations
+
+| NBR (bit/s)   | DBR (bit/s)   | SP (%)   |   BRP |   NSEG1 |   NSEG2 |   NSJW |   DSEG1 |   DSEG2 |   DSJW |
+|---------------|---------------|----------|-------|---------|---------|--------|---------|---------|--------|
+| 1.000.000     | 5.000.000     | 87.5%    |     1 |      69 |      10 |      4 |      13 |       2 |      2 |
+| 1.000.000     | 5.000.000     | 81.2%    |     1 |      64 |      15 |      4 |      12 |       3 |      3 |
+| 1.000.000     | 5.000.000     | 75.0%    |     1 |      59 |      20 |      4 |      11 |       4 |      4 |
+| 1.000.000     | 5.000.000     | 68.8%    |     1 |      54 |      25 |      4 |      10 |       5 |      4 |
+| 1.000.000     | 5.000.000     | 62.5%    |     1 |      49 |      30 |      4 |       9 |       6 |      4 |
+| 1.000.000     | 5.000.000     | 56.2%    |     1 |      44 |      35 |      4 |       8 |       7 |      4 |
+| 1.000.000     | 5.000.000     | 50.0%    |     1 |      39 |      40 |      4 |       7 |       8 |      4 |
+| 1.000.000     | 4.000.000     | 90.0%    |     1 |      71 |       8 |      4 |      17 |       2 |      2 |
+| 1.000.000     | 4.000.000     | 85.0%    |     1 |      67 |      12 |      4 |      16 |       3 |      3 |
+| 1.000.000     | 4.000.000     | 80.0%    |     1 |      63 |      16 |      4 |      15 |       4 |      4 |
+| 1.000.000     | 4.000.000     | 75.0%    |     1 |      59 |      20 |      4 |      14 |       5 |      4 |
+| 1.000.000     | 4.000.000     | 70.0%    |     1 |      55 |      24 |      4 |      13 |       6 |      4 |
+| 1.000.000     | 4.000.000     | 65.0%    |     1 |      51 |      28 |      4 |      12 |       7 |      4 |
+| 1.000.000     | 4.000.000     | 60.0%    |     1 |      47 |      32 |      4 |      11 |       8 |      4 |
+| 1.000.000     | 4.000.000     | 55.0%    |     1 |      43 |      36 |      4 |      10 |       9 |      4 |
+| 1.000.000     | 4.000.000     | 50.0%    |     1 |      39 |      40 |      4 |       9 |      10 |      4 |
+| 1.000.000     | 2.000.000     | 90.0%    |     2 |      35 |       4 |      4 |      17 |       2 |      2 |
+| 1.000.000     | 2.000.000     | 85.0%    |     2 |      33 |       6 |      4 |      16 |       3 |      3 |
+| 1.000.000     | 2.000.000     | 80.0%    |     2 |      31 |       8 |      4 |      15 |       4 |      4 |
+| 1.000.000     | 2.000.000     | 75.0%    |     2 |      29 |      10 |      4 |      14 |       5 |      4 |
+| 1.000.000     | 2.000.000     | 70.0%    |     2 |      27 |      12 |      4 |      13 |       6 |      4 |
+| 1.000.000     | 2.000.000     | 65.0%    |     2 |      25 |      14 |      4 |      12 |       7 |      4 |
+| 1.000.000     | 2.000.000     | 62.5%    |     5 |       9 |       6 |      4 |       4 |       3 |      3 |
+| 1.000.000     | 2.000.000     | 60.0%    |     2 |      23 |      16 |      4 |      11 |       8 |      4 |
+| 1.000.000     | 2.000.000     | 55.0%    |     2 |      21 |      18 |      4 |      10 |       9 |      4 |
+| 1.000.000     | 2.000.000     | 50.0%    |     2 |      19 |      20 |      4 |       9 |      10 |      4 |
+| 1.000.000     | 1.000.000     | 90.0%    |     4 |      17 |       2 |      2 |      17 |       2 |      2 |
+| 1.000.000     | 1.000.000     | 87.5%    |     5 |      13 |       2 |      2 |      13 |       2 |      2 |
+| 1.000.000     | 1.000.000     | 85.0%    |     4 |      16 |       3 |      3 |      16 |       3 |      3 |
+| 1.000.000     | 1.000.000     | 81.2%    |     5 |      12 |       3 |      3 |      12 |       3 |      3 |
+| 1.000.000     | 1.000.000     | 80.0%    |     4 |      15 |       4 |      4 |      15 |       4 |      4 |
+| 1.000.000     | 1.000.000     | 75.0%    |     4 |      14 |       5 |      4 |      14 |       5 |      4 |
+| 1.000.000     | 1.000.000     | 70.0%    |     4 |      13 |       6 |      4 |      13 |       6 |      4 |
+| 1.000.000     | 1.000.000     | 68.8%    |     5 |      10 |       5 |      4 |      10 |       5 |      4 |
+| 1.000.000     | 1.000.000     | 65.0%    |     4 |      12 |       7 |      4 |      12 |       7 |      4 |
+| 1.000.000     | 1.000.000     | 62.5%    |     5 |       9 |       6 |      4 |       9 |       6 |      4 |
+| 1.000.000     | 1.000.000     | 60.0%    |     4 |      11 |       8 |      4 |      11 |       8 |      4 |
+| 1.000.000     | 1.000.000     | 56.2%    |     5 |       8 |       7 |      4 |       8 |       7 |      4 |
+| 1.000.000     | 1.000.000     | 55.0%    |     4 |      10 |       9 |      4 |      10 |       9 |      4 |
+| 1.000.000     | 1.000.000     | 50.0%    |     4 |       9 |      10 |      4 |       9 |      10 |      4 |
+| 800.000       | 5.000.000     | 75.0%    |     1 |      74 |      25 |      4 |      11 |       4 |      4 |
+| 800.000       | 5.000.000     | 50.0%    |     1 |      49 |      50 |      4 |       7 |       8 |      4 |
+| 800.000       | 4.000.000     | 90.0%    |     1 |      89 |      10 |      4 |      17 |       2 |      2 |
+| 800.000       | 4.000.000     | 85.0%    |     1 |      84 |      15 |      4 |      16 |       3 |      3 |
+| 800.000       | 4.000.000     | 80.0%    |     1 |      79 |      20 |      4 |      15 |       4 |      4 |
+| 800.000       | 4.000.000     | 75.0%    |     1 |      74 |      25 |      4 |      14 |       5 |      4 |
+| 800.000       | 4.000.000     | 70.0%    |     1 |      69 |      30 |      4 |      13 |       6 |      4 |
+| 800.000       | 4.000.000     | 65.0%    |     1 |      64 |      35 |      4 |      12 |       7 |      4 |
+| 800.000       | 4.000.000     | 60.0%    |     1 |      59 |      40 |      4 |      11 |       8 |      4 |
+| 800.000       | 4.000.000     | 55.0%    |     1 |      54 |      45 |      4 |      10 |       9 |      4 |
+| 800.000       | 4.000.000     | 50.0%    |     1 |      49 |      50 |      4 |       9 |      10 |      4 |
+| 800.000       | 2.000.000     | 90.0%    |     2 |      44 |       5 |      4 |      17 |       2 |      2 |
+| 800.000       | 2.000.000     | 80.0%    |     2 |      39 |      10 |      4 |      15 |       4 |      4 |
+| 800.000       | 2.000.000     | 75.0%    |     5 |      14 |       5 |      4 |       5 |       2 |      2 |
+| 800.000       | 2.000.000     | 70.0%    |     2 |      34 |      15 |      4 |      13 |       6 |      4 |
+| 800.000       | 2.000.000     | 60.0%    |     2 |      29 |      20 |      4 |      11 |       8 |      4 |
+| 800.000       | 2.000.000     | 50.0%    |     2 |      24 |      25 |      4 |       9 |      10 |      4 |
+| 800.000       | 1.000.000     | 80.0%    |     4 |      19 |       5 |      4 |      15 |       4 |      4 |
+| 800.000       | 1.000.000     | 75.0%    |     5 |      14 |       5 |      4 |      11 |       4 |      4 |
+| 800.000       | 1.000.000     | 60.0%    |     4 |      14 |      10 |      4 |      11 |       8 |      4 |
+| 800.000       | 1.000.000     | 50.0%    |     5 |       9 |      10 |      4 |       7 |       8 |      4 |
+| 500.000       | 5.000.000     | 87.5%    |     1 |     139 |      20 |      4 |      13 |       2 |      2 |
+| 500.000       | 5.000.000     | 81.2%    |     1 |     129 |      30 |      4 |      12 |       3 |      3 |
+| 500.000       | 5.000.000     | 75.0%    |     1 |     119 |      40 |      4 |      11 |       4 |      4 |
+| 500.000       | 5.000.000     | 68.8%    |     1 |     109 |      50 |      4 |      10 |       5 |      4 |
+| 500.000       | 5.000.000     | 62.5%    |     1 |      99 |      60 |      4 |       9 |       6 |      4 |
+| 500.000       | 5.000.000     | 56.2%    |     1 |      89 |      70 |      4 |       8 |       7 |      4 |
+| 500.000       | 5.000.000     | 50.0%    |     1 |      79 |      80 |      4 |       7 |       8 |      4 |
+| 500.000       | 4.000.000     | 90.0%    |     1 |     143 |      16 |      4 |      17 |       2 |      2 |
+| 500.000       | 4.000.000     | 85.0%    |     1 |     135 |      24 |      4 |      16 |       3 |      3 |
+| 500.000       | 4.000.000     | 80.0%    |     1 |     127 |      32 |      4 |      15 |       4 |      4 |
+| 500.000       | 4.000.000     | 75.0%    |     1 |     119 |      40 |      4 |      14 |       5 |      4 |
+| 500.000       | 4.000.000     | 70.0%    |     1 |     111 |      48 |      4 |      13 |       6 |      4 |
+| 500.000       | 4.000.000     | 65.0%    |     1 |     103 |      56 |      4 |      12 |       7 |      4 |
+| 500.000       | 4.000.000     | 60.0%    |     1 |      95 |      64 |      4 |      11 |       8 |      4 |
+| 500.000       | 4.000.000     | 55.0%    |     1 |      87 |      72 |      4 |      10 |       9 |      4 |
+| 500.000       | 4.000.000     | 50.0%    |     1 |      79 |      80 |      4 |       9 |      10 |      4 |
+| 500.000       | 2.000.000     | 90.0%    |     2 |      71 |       8 |      4 |      17 |       2 |      2 |
+| 500.000       | 2.000.000     | 85.0%    |     2 |      67 |      12 |      4 |      16 |       3 |      3 |
+| 500.000       | 2.000.000     | 80.0%    |     2 |      63 |      16 |      4 |      15 |       4 |      4 |
+| 500.000       | 2.000.000     | 75.0%    |     2 |      59 |      20 |      4 |      14 |       5 |      4 |
+| 500.000       | 2.000.000     | 70.0%    |     2 |      55 |      24 |      4 |      13 |       6 |      4 |
+| 500.000       | 2.000.000     | 65.0%    |     2 |      51 |      28 |      4 |      12 |       7 |      4 |
+| 500.000       | 2.000.000     | 62.5%    |     5 |      19 |      12 |      4 |       4 |       3 |      3 |
+| 500.000       | 2.000.000     | 60.0%    |     2 |      47 |      32 |      4 |      11 |       8 |      4 |
+| 500.000       | 2.000.000     | 55.0%    |     2 |      43 |      36 |      4 |      10 |       9 |      4 |
+| 500.000       | 2.000.000     | 50.0%    |     2 |      39 |      40 |      4 |       9 |      10 |      4 |
+| 500.000       | 1.000.000     | 90.0%    |     4 |      35 |       4 |      4 |      17 |       2 |      2 |
+| 500.000       | 1.000.000     | 87.5%    |     5 |      27 |       4 |      4 |      13 |       2 |      2 |
+| 500.000       | 1.000.000     | 85.0%    |     4 |      33 |       6 |      4 |      16 |       3 |      3 |
+| 500.000       | 1.000.000     | 81.2%    |     5 |      25 |       6 |      4 |      12 |       3 |      3 |
+| 500.000       | 1.000.000     | 80.0%    |     4 |      31 |       8 |      4 |      15 |       4 |      4 |
+| 500.000       | 1.000.000     | 75.0%    |     4 |      29 |      10 |      4 |      14 |       5 |      4 |
+| 500.000       | 1.000.000     | 70.0%    |     4 |      27 |      12 |      4 |      13 |       6 |      4 |
+| 500.000       | 1.000.000     | 68.8%    |     5 |      21 |      10 |      4 |      10 |       5 |      4 |
+| 500.000       | 1.000.000     | 65.0%    |     4 |      25 |      14 |      4 |      12 |       7 |      4 |
+| 500.000       | 1.000.000     | 62.5%    |     5 |      19 |      12 |      4 |       9 |       6 |      4 |
+| 500.000       | 1.000.000     | 60.0%    |     4 |      23 |      16 |      4 |      11 |       8 |      4 |
+| 500.000       | 1.000.000     | 56.2%    |     5 |      17 |      14 |      4 |       8 |       7 |      4 |
+| 500.000       | 1.000.000     | 55.0%    |     4 |      21 |      18 |      4 |      10 |       9 |      4 |
+| 500.000       | 1.000.000     | 50.0%    |     4 |      19 |      20 |      4 |       9 |      10 |      4 |
+| 250.000       | 5.000.000     | 75.0%    |     1 |     239 |      80 |      4 |      11 |       4 |      4 |
+| 250.000       | 5.000.000     | 68.8%    |     1 |     219 |     100 |      4 |      10 |       5 |      4 |
+| 250.000       | 5.000.000     | 62.5%    |     1 |     199 |     120 |      4 |       9 |       6 |      4 |
+| 250.000       | 5.000.000     | 50.0%    |     2 |      79 |      80 |      4 |       3 |       4 |      4 |
+| 250.000       | 4.000.000     | 80.0%    |     1 |     255 |      64 |      4 |      15 |       4 |      4 |
+| 250.000       | 4.000.000     | 75.0%    |     1 |     239 |      80 |      4 |      14 |       5 |      4 |
+| 250.000       | 4.000.000     | 70.0%    |     1 |     223 |      96 |      4 |      13 |       6 |      4 |
+| 250.000       | 4.000.000     | 65.0%    |     1 |     207 |     112 |      4 |      12 |       7 |      4 |
+| 250.000       | 4.000.000     | 60.0%    |     1 |     191 |     128 |      4 |      11 |       8 |      4 |
+| 250.000       | 4.000.000     | 50.0%    |     2 |      79 |      80 |      4 |       4 |       5 |      4 |
+| 250.000       | 2.000.000     | 90.0%    |     2 |     143 |      16 |      4 |      17 |       2 |      2 |
+| 250.000       | 2.000.000     | 85.0%    |     2 |     135 |      24 |      4 |      16 |       3 |      3 |
+| 250.000       | 2.000.000     | 80.0%    |     2 |     127 |      32 |      4 |      15 |       4 |      4 |
+| 250.000       | 2.000.000     | 75.0%    |     2 |     119 |      40 |      4 |      14 |       5 |      4 |
+| 250.000       | 2.000.000     | 70.0%    |     2 |     111 |      48 |      4 |      13 |       6 |      4 |
+| 250.000       | 2.000.000     | 65.0%    |     2 |     103 |      56 |      4 |      12 |       7 |      4 |
+| 250.000       | 2.000.000     | 62.5%    |     5 |      39 |      24 |      4 |       4 |       3 |      3 |
+| 250.000       | 2.000.000     | 60.0%    |     2 |      95 |      64 |      4 |      11 |       8 |      4 |
+| 250.000       | 2.000.000     | 55.0%    |     2 |      87 |      72 |      4 |      10 |       9 |      4 |
+| 250.000       | 2.000.000     | 50.0%    |     2 |      79 |      80 |      4 |       9 |      10 |      4 |
+| 250.000       | 1.000.000     | 90.0%    |     4 |      71 |       8 |      4 |      17 |       2 |      2 |
+| 250.000       | 1.000.000     | 87.5%    |     5 |      55 |       8 |      4 |      13 |       2 |      2 |
+| 250.000       | 1.000.000     | 85.0%    |     4 |      67 |      12 |      4 |      16 |       3 |      3 |
+| 250.000       | 1.000.000     | 81.2%    |     5 |      51 |      12 |      4 |      12 |       3 |      3 |
+| 250.000       | 1.000.000     | 80.0%    |     4 |      63 |      16 |      4 |      15 |       4 |      4 |
+| 250.000       | 1.000.000     | 75.0%    |     4 |      59 |      20 |      4 |      14 |       5 |      4 |
+| 250.000       | 1.000.000     | 70.0%    |     4 |      55 |      24 |      4 |      13 |       6 |      4 |
+| 250.000       | 1.000.000     | 68.8%    |     5 |      43 |      20 |      4 |      10 |       5 |      4 |
+| 250.000       | 1.000.000     | 65.0%    |     4 |      51 |      28 |      4 |      12 |       7 |      4 |
+| 250.000       | 1.000.000     | 62.5%    |     5 |      39 |      24 |      4 |       9 |       6 |      4 |
+| 250.000       | 1.000.000     | 60.0%    |     4 |      47 |      32 |      4 |      11 |       8 |      4 |
+| 250.000       | 1.000.000     | 56.2%    |     5 |      35 |      28 |      4 |       8 |       7 |      4 |
+| 250.000       | 1.000.000     | 55.0%    |     4 |      43 |      36 |      4 |      10 |       9 |      4 |
+| 250.000       | 1.000.000     | 50.0%    |     4 |      39 |      40 |      4 |       9 |      10 |      4 |
+| 200.000       | 5.000.000     | 75.0%    |     2 |     149 |      50 |      4 |       5 |       2 |      2 |
+| 200.000       | 5.000.000     | 62.5%    |     2 |     124 |      75 |      4 |       4 |       3 |      3 |
+| 200.000       | 5.000.000     | 50.0%    |     2 |      99 |     100 |      4 |       3 |       4 |      4 |
+| 200.000       | 4.000.000     | 80.0%    |     2 |     159 |      40 |      4 |       7 |       2 |      2 |
+| 200.000       | 4.000.000     | 70.0%    |     2 |     139 |      60 |      4 |       6 |       3 |      3 |
+| 200.000       | 4.000.000     | 60.0%    |     2 |     119 |      80 |      4 |       5 |       4 |      4 |
+| 200.000       | 4.000.000     | 50.0%    |     2 |      99 |     100 |      4 |       4 |       5 |      4 |
+| 200.000       | 2.000.000     | 90.0%    |     2 |     179 |      20 |      4 |      17 |       2 |      2 |
+| 200.000       | 2.000.000     | 85.0%    |     2 |     169 |      30 |      4 |      16 |       3 |      3 |
+| 200.000       | 2.000.000     | 80.0%    |     2 |     159 |      40 |      4 |      15 |       4 |      4 |
+| 200.000       | 2.000.000     | 75.0%    |     2 |     149 |      50 |      4 |      14 |       5 |      4 |
+| 200.000       | 2.000.000     | 70.0%    |     2 |     139 |      60 |      4 |      13 |       6 |      4 |
+| 200.000       | 2.000.000     | 65.0%    |     2 |     129 |      70 |      4 |      12 |       7 |      4 |
+| 200.000       | 2.000.000     | 62.5%    |     5 |      49 |      30 |      4 |       4 |       3 |      3 |
+| 200.000       | 2.000.000     | 60.0%    |     2 |     119 |      80 |      4 |      11 |       8 |      4 |
+| 200.000       | 2.000.000     | 55.0%    |     2 |     109 |      90 |      4 |      10 |       9 |      4 |
+| 200.000       | 2.000.000     | 50.0%    |     2 |      99 |     100 |      4 |       9 |      10 |      4 |
+| 200.000       | 1.000.000     | 90.0%    |     4 |      89 |      10 |      4 |      17 |       2 |      2 |
+| 200.000       | 1.000.000     | 87.5%    |     5 |      69 |      10 |      4 |      13 |       2 |      2 |
+| 200.000       | 1.000.000     | 85.0%    |     4 |      84 |      15 |      4 |      16 |       3 |      3 |
+| 200.000       | 1.000.000     | 81.2%    |     5 |      64 |      15 |      4 |      12 |       3 |      3 |
+| 200.000       | 1.000.000     | 80.0%    |     4 |      79 |      20 |      4 |      15 |       4 |      4 |
+| 200.000       | 1.000.000     | 75.0%    |     4 |      74 |      25 |      4 |      14 |       5 |      4 |
+| 200.000       | 1.000.000     | 70.0%    |     4 |      69 |      30 |      4 |      13 |       6 |      4 |
+| 200.000       | 1.000.000     | 68.8%    |     5 |      54 |      25 |      4 |      10 |       5 |      4 |
+| 200.000       | 1.000.000     | 65.0%    |     4 |      64 |      35 |      4 |      12 |       7 |      4 |
+| 200.000       | 1.000.000     | 62.5%    |     5 |      49 |      30 |      4 |       9 |       6 |      4 |
+| 200.000       | 1.000.000     | 60.0%    |     4 |      59 |      40 |      4 |      11 |       8 |      4 |
+| 200.000       | 1.000.000     | 56.2%    |     5 |      44 |      35 |      4 |       8 |       7 |      4 |
+| 200.000       | 1.000.000     | 55.0%    |     4 |      54 |      45 |      4 |      10 |       9 |      4 |
+| 200.000       | 1.000.000     | 50.0%    |     4 |      49 |      50 |      4 |       9 |      10 |      4 |
+| 125.000       | 5.000.000     | 75.0%    |     2 |     239 |      80 |      4 |       5 |       2 |      2 |
+| 125.000       | 5.000.000     | 62.5%    |     2 |     199 |     120 |      4 |       4 |       3 |      3 |
+| 125.000       | 4.000.000     | 80.0%    |     2 |     255 |      64 |      4 |       7 |       2 |      2 |
+| 125.000       | 4.000.000     | 70.0%    |     2 |     223 |      96 |      4 |       6 |       3 |      3 |
+| 125.000       | 4.000.000     | 60.0%    |     2 |     191 |     128 |      4 |       5 |       4 |      4 |
+| 125.000       | 2.000.000     | 80.0%    |     2 |     255 |      64 |      4 |      15 |       4 |      4 |
+| 125.000       | 2.000.000     | 75.0%    |     2 |     239 |      80 |      4 |      14 |       5 |      4 |
+| 125.000       | 2.000.000     | 70.0%    |     2 |     223 |      96 |      4 |      13 |       6 |      4 |
+| 125.000       | 2.000.000     | 65.0%    |     2 |     207 |     112 |      4 |      12 |       7 |      4 |
+| 125.000       | 2.000.000     | 62.5%    |     5 |      79 |      48 |      4 |       4 |       3 |      3 |
+| 125.000       | 2.000.000     | 60.0%    |     2 |     191 |     128 |      4 |      11 |       8 |      4 |
+| 125.000       | 2.000.000     | 50.0%    |     4 |      79 |      80 |      4 |       4 |       5 |      4 |
+| 125.000       | 1.000.000     | 90.0%    |     4 |     143 |      16 |      4 |      17 |       2 |      2 |
+| 125.000       | 1.000.000     | 87.5%    |     5 |     111 |      16 |      4 |      13 |       2 |      2 |
+| 125.000       | 1.000.000     | 85.0%    |     4 |     135 |      24 |      4 |      16 |       3 |      3 |
+| 125.000       | 1.000.000     | 81.2%    |     5 |     103 |      24 |      4 |      12 |       3 |      3 |
+| 125.000       | 1.000.000     | 80.0%    |     4 |     127 |      32 |      4 |      15 |       4 |      4 |
+| 125.000       | 1.000.000     | 75.0%    |     4 |     119 |      40 |      4 |      14 |       5 |      4 |
+| 125.000       | 1.000.000     | 70.0%    |     4 |     111 |      48 |      4 |      13 |       6 |      4 |
+| 125.000       | 1.000.000     | 68.8%    |     5 |      87 |      40 |      4 |      10 |       5 |      4 |
+| 125.000       | 1.000.000     | 65.0%    |     4 |     103 |      56 |      4 |      12 |       7 |      4 |
+| 125.000       | 1.000.000     | 62.5%    |     5 |      79 |      48 |      4 |       9 |       6 |      4 |
+| 125.000       | 1.000.000     | 60.0%    |     4 |      95 |      64 |      4 |      11 |       8 |      4 |
+| 125.000       | 1.000.000     | 56.2%    |     5 |      71 |      56 |      4 |       8 |       7 |      4 |
+| 125.000       | 1.000.000     | 55.0%    |     4 |      87 |      72 |      4 |      10 |       9 |      4 |
+| 125.000       | 1.000.000     | 50.0%    |     4 |      79 |      80 |      4 |       9 |      10 |      4 |
+| 100.000       | 4.000.000     | 60.0%    |     4 |     119 |      80 |      4 |       2 |       2 |      2 |
+| 100.000       | 2.000.000     | 80.0%    |     4 |     159 |      40 |      4 |       7 |       2 |      2 |
+| 100.000       | 2.000.000     | 75.0%    |     5 |     119 |      40 |      4 |       5 |       2 |      2 |
+| 100.000       | 2.000.000     | 70.0%    |     4 |     139 |      60 |      4 |       6 |       3 |      3 |
+| 100.000       | 2.000.000     | 62.5%    |     5 |      99 |      60 |      4 |       4 |       3 |      3 |
+| 100.000       | 2.000.000     | 60.0%    |     4 |     119 |      80 |      4 |       5 |       4 |      4 |
+| 100.000       | 2.000.000     | 50.0%    |     4 |      99 |     100 |      4 |       4 |       5 |      4 |
+| 100.000       | 1.000.000     | 90.0%    |     4 |     179 |      20 |      4 |      17 |       2 |      2 |
+| 100.000       | 1.000.000     | 87.5%    |     5 |     139 |      20 |      4 |      13 |       2 |      2 |
+| 100.000       | 1.000.000     | 85.0%    |     4 |     169 |      30 |      4 |      16 |       3 |      3 |
+| 100.000       | 1.000.000     | 81.2%    |     5 |     129 |      30 |      4 |      12 |       3 |      3 |
+| 100.000       | 1.000.000     | 80.0%    |     4 |     159 |      40 |      4 |      15 |       4 |      4 |
+| 100.000       | 1.000.000     | 75.0%    |     4 |     149 |      50 |      4 |      14 |       5 |      4 |
+| 100.000       | 1.000.000     | 70.0%    |     4 |     139 |      60 |      4 |      13 |       6 |      4 |
+| 100.000       | 1.000.000     | 68.8%    |     5 |     109 |      50 |      4 |      10 |       5 |      4 |
+| 100.000       | 1.000.000     | 65.0%    |     4 |     129 |      70 |      4 |      12 |       7 |      4 |
+| 100.000       | 1.000.000     | 62.5%    |     5 |      99 |      60 |      4 |       9 |       6 |      4 |
+| 100.000       | 1.000.000     | 60.0%    |     4 |     119 |      80 |      4 |      11 |       8 |      4 |
+| 100.000       | 1.000.000     | 56.2%    |     5 |      89 |      70 |      4 |       8 |       7 |      4 |
+| 100.000       | 1.000.000     | 55.0%    |     4 |     109 |      90 |      4 |      10 |       9 |      4 |
+| 100.000       | 1.000.000     | 50.0%    |     4 |      99 |     100 |      4 |       9 |      10 |      4 |
+| 50.000        | 2.000.000     | 75.0%    |     5 |     239 |      80 |      4 |       5 |       2 |      2 |
+| 50.000        | 2.000.000     | 62.5%    |     5 |     199 |     120 |      4 |       4 |       3 |      3 |
+| 50.000        | 2.000.000     | 60.0%    |     8 |     119 |      80 |      4 |       2 |       2 |      2 |
+| 50.000        | 1.000.000     | 80.0%    |     8 |     159 |      40 |      4 |       7 |       2 |      2 |
+| 50.000        | 1.000.000     | 75.0%    |     5 |     239 |      80 |      4 |      11 |       4 |      4 |
+| 50.000        | 1.000.000     | 70.0%    |     8 |     139 |      60 |      4 |       6 |       3 |      3 |
+| 50.000        | 1.000.000     | 68.8%    |     5 |     219 |     100 |      4 |      10 |       5 |      4 |
+| 50.000        | 1.000.000     | 62.5%    |     5 |     199 |     120 |      4 |       9 |       6 |      4 |
+| 50.000        | 1.000.000     | 60.0%    |     8 |     119 |      80 |      4 |       5 |       4 |      4 |
+| 50.000        | 1.000.000     | 50.0%    |     8 |      99 |     100 |      4 |       4 |       5 |      4 |
+
+---
+
+[Install client certificate (mTLS)]:
+
+# Install client certificate (mTLS)
+
+When mTLS is enabled, the CANsub.4 only grants access to a browser that presents a valid client certificate and key. The [Enable Mutual Authentication](https://canlogger.csselectronics.com/cansub-docs/cansub4/connection/security/mtls.html.md#enable-mutual-authentication) guide bundles the client certificate and key into a single PKCS#12 file (`[CLIENT-NAME].p12`) for this purpose.
+
+This page covers importing that bundle into Chrome and Firefox. OS-level installation is outside the scope of this manual.
+
+> ##### Client certificate installation guides
+> 
+> * [Chrome browser](#chrome-browser)
+> * [Firefox browser](#firefox-browser)
+
+#### NOTE
+Steps may differ slightly depending on OS and browser version.
+
+---
+
+## Chrome browser
+
+1. Enter the following URL in the Chrome address bar to open the Certificate Manager.
+   ```text
+   chrome://certificate-manager/
+   ```
+
+   ![image](getting_started/certificate/chrome_1.png)
+2. Click *Your certificates*, then *Manage imported certificates from …* or *View imported certificates from …* (depending on OS and version).
+   ![image](connection/security/client_certificate/chrome_2.png)
+3. Click *Import*.
+   ![image](connection/security/client_certificate/chrome_3.png)
+4. Navigate to the client certificate bundle file (`.p12`) and click *Select*. Ensure the file extension filter includes `.p12`.
+   ![image](connection/security/client_certificate/chrome_4.png)
+5. Enter the *certificate password* chosen when the `.p12` file was created (leave blank if no password was set).
+   ![image](connection/security/client_certificate/chrome_5.png)
+6. The certificate is now listed under *Your certificates*.
+   ![image](connection/security/client_certificate/chrome_6.png)
+7. When accessing the CANsub.4 over the Ethernet connection, the browser prompts for a client certificate. Select the installed certificate and click *OK*.
+   ![image](connection/security/client_certificate/chrome_7.png)
+
+---
+
+## Firefox browser
+
+1. Enter the following URL in the Firefox address bar to open Privacy & Security settings.
+   ```text
+   about:preferences#privacy
+   ```
+
+   ![image](getting_started/certificate/firefox_1.png)
+2. Find the *Security* section. Click *Manage Certificates*.
+   ![image](getting_started/certificate/firefox_2.png)
+3. Select the *Your Certificates* tab and click *Import*.
+   ![image](connection/security/client_certificate/firefox_3.png)
+4. Navigate to the client certificate bundle file (`.p12`) and click *Select*.
+   ![image](connection/security/client_certificate/firefox_4.png)
+5. Enter the *certificate password* chosen when the `.p12` file was created (leave blank if no password was set).
+   ![image](connection/security/client_certificate/firefox_5.png)
+6. The certificate is now listed under *Your Certificates*.
+   ![image](connection/security/client_certificate/firefox_6.png)
+7. When accessing the CANsub.4 over the Ethernet connection, the browser prompts for a client certificate. Select the installed certificate and click *OK*.
+   ![image](connection/security/client_certificate/firefox_7.png)
+
+---
+
+[TLS handshake]:
+
+# TLS handshake
+
+The sequence diagram below provides a simplified overview of the TLS handshake between the client and the CANsub.4, including the optional TLS Mutual Authentication sequence. It does not cover every detail of the TLS protocol.
+
+```mermaid
+sequenceDiagram
+    participant Client as Client (user)
+    participant Server as Server (CANsub)
+
+    Client->>Server: ClientHello
+    Note over Client,Server: Client proposes TLS version, cipher suites, and random value
+
+    Server->>Client: ServerHello
+    Note over Client,Server: Server selects TLS version and cipher suite,<br>and sends random value
+
+    Server->>Client: Server certificate (public)
+    Server->>Client: CertificateVerify (proving server owns private key)
+
+    Client->>Client: Verify server identity
+
+    opt Mutual Authentication only
+        Server->>Client: CertificateRequest
+        Client->>Server: Client certificate (public)
+        Client->>Server: CertificateVerify (proving client owns private key)
+
+        Server->>Server: Verify client identity
+    end
+
+    Client->>Server: Complete TLS handshake
+    Server->>Client: Complete TLS handshake
+
+    Note over Client,Server: Encrypted TLS connection established
+
+    Client<<->>Server: Encrypted application data
+```
+
+---
+
+[CANsub certificate installation]:
+
+# CANsub certificate installation
+
+Installing the CANsub root certificate allows the browser to trust the CANsub.4 without displaying a security warning.
+
+The guides below cover installation of the certificate in the Chrome and Firefox browsers. OS-level installation is outside the scope of this manual. Steps may differ slightly depending on the browser version.
+
+[`Download CANsub root certificate`](https://canlogger.csselectronics.com/cansub-docs/cansub4/_downloads/c09c84fa360e0930c50285fffb35c76f/cansub_root_cert.crt)
+<br/>
+`SHA-256 fingerprint = D064C85905195400216A11BB50D754865ED2B5F997D36A9EA2EA97883B15D0F1`
+<br/>
+> ##### Certificate installation guides
+> 
+> * [Chrome browser](#chrome-browser)
+> * [Firefox browser](#firefox-browser)
+
+---
+
+## Chrome browser
+
+1. Enter the following URL in the Chrome address bar to open the Certificate Manager.
+   ```text
+   chrome://certificate-manager/
+   ```
+
+   ![image](getting_started/certificate/chrome_1.png)
+2. Click *Installed by you* under *Customised*.
+   ![image](getting_started/certificate/chrome_2.png)
+3. Click *Import* next to *Trusted certificates*.
+   ![image](getting_started/certificate/chrome_3.png)
+4. Select the downloaded CANsub root certificate file and click *Select*.
+   ![image](getting_started/certificate/chrome_4.png)
+5. The certificate is now listed under *Trusted certificates*. The SHA-256 fingerprint is shown. Optionally, verify it against the value provided above.
+   ![image](getting_started/certificate/chrome_5.png)
+
+---
+
+## Firefox browser
+
+1. Enter the following URL in the Firefox address bar to open Privacy & Security settings.
+   ```text
+   about:preferences#privacy
+   ```
+
+   ![image](getting_started/certificate/firefox_1.png)
+2. Find the *Security* section. Click *Manage Certificates*.
+   ![image](getting_started/certificate/firefox_2.png)
+3. Select the *Authorities* tab and click *Import*.
+   ![image](getting_started/certificate/firefox_3.png)
+4. Select the downloaded CANsub root certificate file and click *Select*.
+   ![image](getting_started/certificate/firefox_4.png)
+5. Check *Trust this CA to identify websites*. Optionally, click *View* to verify the certificate SHA-256 fingerprint against the value provided above.
+   ![image](getting_started/certificate/firefox_5.png)
+6. Click *OK*. Scroll down in the *Authorities* list to confirm the *CANsub root* certificate is listed, then click *OK* to close the Certificate Manager.
+   ![image](getting_started/certificate/firefox_6.png)

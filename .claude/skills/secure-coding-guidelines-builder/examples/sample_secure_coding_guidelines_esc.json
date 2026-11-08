@@ -1,0 +1,25 @@
+{
+  "project": {
+    "name": "Electronic Stability Control (ESC) System",
+    "doc_id": "ESC-SCG-001",
+    "revision": "1.0",
+    "date": "2025-05-01",
+    "author": "Security Team",
+    "approver": "Chief Architect"
+  },
+  "code_base": "ESC Firmware",
+  "cal": "C",
+  "language": "C",
+  "applicable_standards": [
+    "CERT C Secure Coding Standard",
+    "MISRA C:2012 Amendment 1",
+    "ISO 21434 Cybersecurity Engineering",
+    "ISO 26262 Functional Safety"
+  ],
+  "static_analysis_tools": [
+    "Coverity (Synopsys)",
+    "CodeSonar (GrammaTech)",
+    "Polyspace (MathWorks)"
+  ],
+  "description": "ESC firmware implements vehicle stability control via integrated sensor fusion, brake intervention, and engine torque reduction. Secure coding guidelines focus on memory safety (sensor buffer handling), integer safety (torque/pressure calculations), cryptographic authentication of sensor inputs (IPMs, IPC), and secure logging of control decisions and faults. CAL-C (moderate risk of misuse) requires Mandatory and Required rules without exception; Advisory rules may be deviated with justification. All rules are subject to static analysis baseline policy and deviation tracking."
+}

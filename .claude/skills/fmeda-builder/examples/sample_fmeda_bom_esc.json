@@ -1,0 +1,121 @@
+{
+  "project": {
+    "name": "ESC (Electronic Stability Control)",
+    "doc_id": "ESC-FMEDA-001",
+    "revision": "1.0",
+    "date": "2026-04-28",
+    "author": "Safety Engineer",
+    "approver": "Engineering Manager"
+  },
+  "linked_tsc": "path/to/TSC_ESC_demo.xlsx",
+  "linked_hw_arch": "path/to/HW_Architecture_ESC.xlsx",
+  "target_asil": "D",
+  "mission_profile": {
+    "operating_hours_per_year": 500,
+    "lifetime_years": 15,
+    "ambient_temp_c": 65
+  },
+  "fit_source": "Supplier datasheets + IEC 62380",
+  "hw_elements": [
+    {
+      "id": "HW-E-001",
+      "name": "Main Processor MCU",
+      "type": "MCU",
+      "fit": 120,
+      "safety_related": true,
+      "tsc_node_id": "N10"
+    },
+    {
+      "id": "HW-E-002",
+      "name": "Watchdog Timer IC",
+      "type": "MCU",
+      "fit": 30,
+      "safety_related": true,
+      "tsc_node_id": "N11"
+    },
+    {
+      "id": "HW-E-003",
+      "name": "Safety-Critical RAM",
+      "type": "Memory",
+      "fit": 80,
+      "safety_related": true,
+      "tsc_node_id": "N12"
+    },
+    {
+      "id": "HW-E-004",
+      "name": "Motor Driver IC (H-Bridge)",
+      "type": "Driver",
+      "fit": 100,
+      "safety_related": true,
+      "tsc_node_id": "N20"
+    },
+    {
+      "id": "HW-E-005",
+      "name": "Wheel Speed Sensor",
+      "type": "Sensor",
+      "fit": 50,
+      "safety_related": true,
+      "tsc_node_id": "N30"
+    },
+    {
+      "id": "HW-E-006",
+      "name": "Power Supply Regulator",
+      "type": "Power",
+      "fit": 60,
+      "safety_related": true,
+      "tsc_node_id": "N40"
+    },
+    {
+      "id": "HW-E-007",
+      "name": "Storage Capacitor (bulk)",
+      "type": "Capacitor",
+      "fit": 10,
+      "safety_related": false
+    },
+    {
+      "id": "HW-E-008",
+      "name": "Main Inductor (kick-down)",
+      "type": "Inductor",
+      "fit": 5,
+      "safety_related": false
+    }
+  ],
+  "failure_mode_overrides": [
+    {
+      "hw_e_id": "HW-E-001",
+      "failure_mode": "Stuck-at",
+      "distribution_pct": 0.28,
+      "dc_pct": 99
+    },
+    {
+      "hw_e_id": "HW-E-001",
+      "failure_mode": "Transient bit flip",
+      "distribution_pct": 0.45,
+      "dc_pct": 85
+    },
+    {
+      "hw_e_id": "HW-E-003",
+      "failure_mode": "Single-bit error",
+      "distribution_pct": 0.55,
+      "dc_pct": 98
+    },
+    {
+      "hw_e_id": "HW-E-004",
+      "failure_mode": "Open output",
+      "distribution_pct": 0.30,
+      "dc_pct": 95
+    },
+    {
+      "hw_e_id": "HW-E-005",
+      "failure_mode": "No output",
+      "distribution_pct": 0.25,
+      "dc_pct": 90
+    },
+    {
+      "hw_e_id": "HW-E-006",
+      "failure_mode": "Undervoltage",
+      "distribution_pct": 0.42,
+      "dc_pct": 99
+    }
+  ]
+}

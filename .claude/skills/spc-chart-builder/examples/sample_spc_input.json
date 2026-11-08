@@ -1,0 +1,69 @@
+{
+  "process": {
+    "id": "PCB-Y-COORD",
+    "name": "PCB Component Placement - Y-Coordinate",
+    "characteristic": "Component Y-coordinate (mm) on PCB",
+    "unit": "mm",
+    "method": "Vision system measurement from PCB optical reference",
+    "frequency": "Every 25 boards (5 samples per board, subgroup size 5)"
+  },
+  "spec_limits": {
+    "usl": 125.50,
+    "lsl": 124.50,
+    "target": 125.00
+  },
+  "subgroup_size": 5,
+  "chart_type": "Xbar-R",
+  "subgroups": [
+    {
+      "subgroup_id": "SG001",
+      "sample_date": "2026-04-10 08:15",
+      "measurements": [125.02, 124.98, 125.01, 124.99, 125.00]
+    },
+    {
+      "subgroup_id": "SG002",
+      "sample_date": "2026-04-10 09:30",
+      "measurements": [125.01, 125.00, 124.97, 125.02, 124.99]
+    },
+    {
+      "subgroup_id": "SG003",
+      "sample_date": "2026-04-10 10:45",
+      "measurements": [124.96, 125.03, 125.01, 124.98, 125.02]
+    },
+    {
+      "subgroup_id": "SG004",
+      "sample_date": "2026-04-10 12:00",
+      "measurements": [125.05, 125.04, 125.06, 125.03, 125.05]
+    },
+    {
+      "subgroup_id": "SG005",
+      "sample_date": "2026-04-10 13:15",
+      "measurements": [125.08, 125.10, 125.07, 125.09, 125.06]
+    },
+    {
+      "subgroup_id": "SG006",
+      "sample_date": "2026-04-10 14:30",
+      "measurements": [125.12, 125.15, 125.11, 125.14, 125.13]
+    },
+    {
+      "subgroup_id": "SG007",
+      "sample_date": "2026-04-10 15:45",
+      "measurements": [125.20, 125.18, 125.19, 125.17, 125.21]
+    },
+    {
+      "subgroup_id": "SG008",
+      "sample_date": "2026-04-10 17:00",
+      "measurements": [125.25, 125.27, 125.24, 125.26, 125.28]
+    },
+    {
+      "subgroup_id": "SG009",
+      "sample_date": "2026-04-11 08:00",
+      "measurements": [125.02, 125.01, 124.99, 125.00, 125.01]
+    },
+    {
+      "subgroup_id": "SG010",
+      "sample_date": "2026-04-11 09:15",
+      "measurements": [125.00, 124.98, 125.02, 125.01, 124.99]
+    }
+  ]
+}

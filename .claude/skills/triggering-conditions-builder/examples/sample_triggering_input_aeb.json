@@ -1,0 +1,33 @@
+{
+  "system": {"name": "AEB Triggering Conditions", "project": "HV2024", "date": "2026-05-01"},
+  "environmental_triggers": [
+    {"id": "E01", "category": "Weather", "description": "Heavy rain (visibility <50m)", "likelihood": "Rare"},
+    {"id": "E02", "category": "Lighting", "description": "Sun glare (low sun angle)", "likelihood": "Occasional"},
+    {"id": "E03", "category": "Road Surface", "description": "Wet surface, reduced friction", "likelihood": "Occasional"}
+  ],
+  "sensor_triggers": [
+    {"id": "S01", "sensor_type": "Camera", "failure_mode": "Saturation", "description": "Bright light causes sensor saturation", "likelihood": "Occasional"},
+    {"id": "S02", "sensor_type": "Camera", "failure_mode": "Contamination", "description": "Water droplets, dust on lens", "likelihood": "Common"},
+    {"id": "S03", "sensor_type": "Lidar", "failure_mode": "Rain absorption", "description": "Lidar signal absorbed by rain", "likelihood": "Rare"}
+  ],
+  "road_infra_triggers": [
+    {"id": "R01", "type": "Lane Markings", "description": "Faded or missing lane markings", "likelihood": "Occasional"},
+    {"id": "R02", "type": "Construction", "description": "Temporary lane markings or construction zone", "likelihood": "Rare"}
+  ],
+  "road_user_triggers": [
+    {"id": "U01", "road_user_type": "Motorcycle", "description": "Motorcycle in adjacent lane, small profile", "likelihood": "Occasional"},
+    {"id": "U02", "road_user_type": "Pedestrian", "description": "Pedestrian on roadway, non-standard pose", "likelihood": "Rare"}
+  ],
+  "system_state_triggers": [
+    {"id": "SY01", "state": "Warm-up", "description": "First 10 seconds after startup", "likelihood": "Rare"},
+    {"id": "SY02", "state": "OTA Update", "description": "Over-the-air update in progress", "likelihood": "Very Rare"}
+  ],
+  "driver_state_triggers": [
+    {"id": "D01", "state": "Hands-off", "description": "Driver hands off wheel; distraction detected", "likelihood": "Occasional"},
+    {"id": "D02", "state": "Drowsiness", "description": "Driver eye-closure detected", "likelihood": "Rare"}
+  ],
+  "combined_triggers": [
+    {"id": "C01", "condition_a": "E02", "condition_b": "S01", "description": "Sun glare + camera saturation", "likelihood": "Occasional"},
+    {"id": "C02", "condition_a": "E01", "condition_b": "U01", "description": "Heavy rain + motorcycle presence", "likelihood": "Very Rare"}
+  ]
+}

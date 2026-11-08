@@ -1,0 +1,571 @@
+{
+  "program": {
+    "name": "ESC ECU Production Control Plan",
+    "part_name": "Electronic Stability Control Module",
+    "part_number": "ESC-ECU-2026-001",
+    "control_plan_type": "Production",
+    "supplier": "Tier-1 Automotive Electronics",
+    "customer": "OEM Vehicle Dynamics",
+    "doc_id": "CP-ESC-2026-001",
+    "revision": "A",
+    "date": "2026-01-15",
+    "core_team": [
+      {
+        "role": "Control Plan Owner",
+        "name": "Jane Smith",
+        "org": "Quality Engineering",
+        "phone": "+1-234-567-8901",
+        "email": "jane.smith@supplier.com"
+      },
+      {
+        "role": "Process Engineer",
+        "name": "Bob Johnson",
+        "org": "Manufacturing Engineering",
+        "phone": "+1-234-567-8902",
+        "email": "bob.johnson@supplier.com"
+      },
+      {
+        "role": "Supplier Quality Lead",
+        "name": "Carol Davis",
+        "org": "Quality Assurance",
+        "phone": "+1-234-567-8903",
+        "email": "carol.davis@supplier.com"
+      },
+      {
+        "role": "Customer Representative",
+        "name": "Mark Wilson",
+        "org": "OEM Quality Engineering",
+        "phone": "+1-555-123-4567",
+        "email": "mark.wilson@oem.com"
+      }
+    ]
+  },
+  "process_steps": [
+    {
+      "step_id": "PS-01",
+      "operation": "PCB Component Placement",
+      "equipment": "Panasonic CM602 Pick-and-Place"
+    },
+    {
+      "step_id": "PS-02",
+      "operation": "Solder Reflow",
+      "equipment": "Ersa Hotflow Reflow Oven"
+    },
+    {
+      "step_id": "PS-03",
+      "operation": "Solder Inspection (AOI)",
+      "equipment": "Koh Young KY8030 Automated Optical Inspection"
+    },
+    {
+      "step_id": "PS-04",
+      "operation": "In-Circuit Test (ICT)",
+      "equipment": "Spea TestJet Vista 4.5 ICT System"
+    },
+    {
+      "step_id": "PS-05",
+      "operation": "Functional Test (FCT)",
+      "equipment": "ESC Dyno Test Stand with Load Cell"
+    },
+    {
+      "step_id": "PS-06",
+      "operation": "Firmware Programming",
+      "equipment": "Segger J-Link Programmer"
+    },
+    {
+      "step_id": "PS-07",
+      "operation": "Final Inspection & Label",
+      "equipment": "Manual inspection station + Label Applicator"
+    },
+    {
+      "step_id": "PS-08",
+      "operation": "Packaging & Shipping",
+      "equipment": "ESD-Safe packaging, traceability system"
+    }
+  ],
+  "characteristics": [
+    {
+      "char_id": "CH-001",
+      "step_id": "PS-01",
+      "char_number": "1.1",
+      "type": "Product",
+      "special_class": "Critical",
+      "specification": "Component X position",
+      "tolerance": "1.50 +/- 0.05 mm",
+      "gage_id": "G-001",
+      "sample_size": "5 parts",
+      "sample_frequency": "every 1 hour",
+      "control_method": "SPC Xbar-R",
+      "reaction_plan_id": "RP-001",
+      "pfmea_ref": "PFMEA-001-FM-03",
+      "pfmea_failure_mode": "Component misaligned X-axis",
+      "severity": "9",
+      "occurrence": "3",
+      "detection": "3",
+      "rpn": "81"
+    },
+    {
+      "char_id": "CH-002",
+      "step_id": "PS-01",
+      "char_number": "1.2",
+      "type": "Product",
+      "special_class": "Critical",
+      "specification": "Component Y position",
+      "tolerance": "2.30 +/- 0.05 mm",
+      "gage_id": "G-001",
+      "sample_size": "5 parts",
+      "sample_frequency": "every 1 hour",
+      "control_method": "SPC Xbar-R",
+      "reaction_plan_id": "RP-001",
+      "pfmea_ref": "PFMEA-001-FM-04",
+      "pfmea_failure_mode": "Component misaligned Y-axis",
+      "severity": "9",
+      "occurrence": "3",
+      "detection": "3",
+      "rpn": "81"
+    },
+    {
+      "char_id": "CH-003",
+      "step_id": "PS-01",
+      "char_number": "1.3",
+      "type": "Product",
+      "special_class": "Critical",
+      "specification": "Component rotation angle",
+      "tolerance": "0 +/- 5 degrees",
+      "gage_id": "G-001",
+      "sample_size": "5 parts",
+      "sample_frequency": "every 1 hour",
+      "control_method": "SPC Xbar-R",
+      "reaction_plan_id": "RP-001",
+      "pfmea_ref": "PFMEA-001-FM-05",
+      "pfmea_failure_mode": "Component rotated incorrectly",
+      "severity": "9",
+      "occurrence": "2",
+      "detection": "4",
+      "rpn": "72"
+    },
+    {
+      "char_id": "CH-004",
+      "step_id": "PS-02",
+      "char_number": "2.1",
+      "type": "Process",
+      "special_class": "Significant",
+      "specification": "Reflow peak temperature",
+      "tolerance": "255 +/- 5 degrees C",
+      "gage_id": "G-002",
+      "sample_size": "1 part per cycle",
+      "sample_frequency": "continuous (every 3 min)",
+      "control_method": "SPC p-chart",
+      "reaction_plan_id": "RP-002",
+      "pfmea_ref": "PFMEA-002-FM-02",
+      "pfmea_failure_mode": "Solder temperature out of window",
+      "severity": "8",
+      "occurrence": "4",
+      "detection": "3",
+      "rpn": "96"
+    },
+    {
+      "char_id": "CH-005",
+      "step_id": "PS-03",
+      "char_number": "3.1",
+      "type": "Product",
+      "special_class": "Critical",
+      "specification": "Solder joint quality (visual + X-ray)",
+      "tolerance": "No voids > 25% area; no bridges",
+      "gage_id": "G-003",
+      "sample_size": "all parts",
+      "sample_frequency": "continuous (100% AOI)",
+      "control_method": "100% Automated Optical Inspection",
+      "reaction_plan_id": "RP-003",
+      "pfmea_ref": "PFMEA-002-FM-01",
+      "pfmea_failure_mode": "Cold solder joint or void",
+      "severity": "9",
+      "occurrence": "5",
+      "detection": "2",
+      "rpn": "90"
+    },
+    {
+      "char_id": "CH-006",
+      "step_id": "PS-04",
+      "char_number": "4.1",
+      "type": "Product",
+      "special_class": "Significant",
+      "specification": "ICT test pass/fail",
+      "tolerance": "All nets powered, no shorts, resistance within spec",
+      "gage_id": "G-004",
+      "sample_size": "all parts",
+      "sample_frequency": "continuous (100%)",
+      "control_method": "100% In-Circuit Test",
+      "reaction_plan_id": "RP-003",
+      "pfmea_ref": "PFMEA-003-FM-06",
+      "pfmea_failure_mode": "Electrical connection failure (open/short)",
+      "severity": "9",
+      "occurrence": "2",
+      "detection": "2",
+      "rpn": "36"
+    },
+    {
+      "char_id": "CH-007",
+      "step_id": "PS-05",
+      "char_number": "5.1",
+      "type": "Product",
+      "special_class": "Critical",
+      "specification": "FCT functional test pass/fail",
+      "tolerance": "Boot OK, all outputs within spec, response time < 50 ms",
+      "gage_id": "G-005",
+      "sample_size": "all parts",
+      "sample_frequency": "continuous (100%)",
+      "control_method": "100% Functional Test",
+      "reaction_plan_id": "RP-003",
+      "pfmea_ref": "PFMEA-003-FM-08",
+      "pfmea_failure_mode": "Functional behavior out of spec",
+      "severity": "9",
+      "occurrence": "3",
+      "detection": "2",
+      "rpn": "54"
+    },
+    {
+      "char_id": "CH-008",
+      "step_id": "PS-06",
+      "char_number": "6.1",
+      "type": "Product",
+      "special_class": "Critical",
+      "specification": "Firmware version & CRC",
+      "tolerance": "Version = 2026.01.15; CRC = 0x12AB (exact match)",
+      "gage_id": "G-006",
+      "sample_size": "all parts",
+      "sample_frequency": "continuous (100%)",
+      "control_method": "100% Firmware Read-back Verification",
+      "reaction_plan_id": "RP-004",
+      "pfmea_ref": "PFMEA-004-FM-01",
+      "pfmea_failure_mode": "Firmware version mismatch or corrupt",
+      "severity": "10",
+      "occurrence": "1",
+      "detection": "1",
+      "rpn": "10"
+    },
+    {
+      "char_id": "CH-009",
+      "step_id": "PS-07",
+      "char_number": "7.1",
+      "type": "Product",
+      "special_class": "Significant",
+      "specification": "Component orientation (polarity key alignment)",
+      "tolerance": "Key slot aligned; cannot insert wrong way",
+      "gage_id": "G-007",
+      "sample_size": "first piece per setup, then 10%",
+      "sample_frequency": "every setup + every 100 parts",
+      "control_method": "Poka-Yoke (mechanical prevention) + visual audit",
+      "reaction_plan_id": "RP-005",
+      "pfmea_ref": "PFMEA-005-FM-02",
+      "pfmea_failure_mode": "Connector keyed incorrectly (reverse polarity)",
+      "severity": "9",
+      "occurrence": "1",
+      "detection": "2",
+      "rpn": "18"
+    },
+    {
+      "char_id": "CH-010",
+      "step_id": "PS-07",
+      "char_number": "7.2",
+      "type": "Product",
+      "special_class": "Standard",
+      "specification": "Label position & readability",
+      "tolerance": "Label centered within 5 mm; text readable; no creasing",
+      "gage_id": "G-008",
+      "sample_size": "visual inspection: 10%",
+      "sample_frequency": "every 100 parts",
+      "control_method": "100% visual check at line + weekly audit",
+      "reaction_plan_id": "RP-006",
+      "pfmea_ref": "PFMEA-005-FM-03",
+      "pfmea_failure_mode": "Label missing, illegible, or off-center",
+      "severity": "5",
+      "occurrence": "2",
+      "detection": "4",
+      "rpn": "40"
+    },
+    {
+      "char_id": "CH-011",
+      "step_id": "PS-08",
+      "char_number": "8.1",
+      "type": "Product",
+      "special_class": "Significant",
+      "specification": "Part traceability (serial number, lot tracking)",
+      "tolerance": "Serial # readable in ERP; lot date within 30 days of test date",
+      "gage_id": "G-009",
+      "sample_size": "all parts",
+      "sample_frequency": "100% (automated scan)",
+      "control_method": "Automated barcode scanning + MES verification",
+      "reaction_plan_id": "RP-007",
+      "pfmea_ref": "PFMEA-005-FM-04",
+      "pfmea_failure_mode": "Traceability data missing or corrupted",
+      "severity": "7",
+      "occurrence": "1",
+      "detection": "3",
+      "rpn": "21"
+    },
+    {
+      "char_id": "CH-012",
+      "step_id": "PS-01",
+      "char_number": "1.4",
+      "type": "Product",
+      "special_class": "Standard",
+      "specification": "PCB visual inspection (cleanliness, no cracks)",
+      "tolerance": "No visible flux residue > 5 mm; no board cracks",
+      "gage_id": "G-010",
+      "sample_size": "visual: 5%",
+      "sample_frequency": "every 500 parts",
+      "control_method": "100% visual by operator + audit",
+      "reaction_plan_id": "RP-006",
+      "pfmea_ref": "PFMEA-001-FM-01",
+      "pfmea_failure_mode": "PCB contamination or physical damage",
+      "severity": "6",
+      "occurrence": "2",
+      "detection": "4",
+      "rpn": "48"
+    },
+    {
+      "char_id": "CH-013",
+      "step_id": "PS-02",
+      "char_number": "2.2",
+      "type": "Process",
+      "special_class": "Significant",
+      "specification": "Solder paste tack time",
+      "tolerance": "> 20 min at 25°C before reflow",
+      "gage_id": "G-011",
+      "sample_size": "1 test strip per 4 hours",
+      "sample_frequency": "4-hour intervals + end of shift",
+      "control_method": "Peel test + operator log",
+      "reaction_plan_id": "RP-008",
+      "pfmea_ref": "PFMEA-002-FM-03",
+      "pfmea_failure_mode": "Solder paste tack insufficient; components shift during reflow",
+      "severity": "8",
+      "occurrence": "2",
+      "detection": "3",
+      "rpn": "48"
+    },
+    {
+      "char_id": "CH-014",
+      "step_id": "PS-04",
+      "char_number": "4.2",
+      "type": "Product",
+      "special_class": "Significant",
+      "specification": "ICT analog measurement (reference voltage rail)",
+      "tolerance": "5.0 +/- 0.2 V (within 4% tolerance)",
+      "gage_id": "G-004",
+      "sample_size": "all parts (100% ICT data)",
+      "sample_frequency": "continuous (100%)",
+      "control_method": "100% ICT + trend charting (p-chart on # out-of-spec)",
+      "reaction_plan_id": "RP-003",
+      "pfmea_ref": "PFMEA-003-FM-07",
+      "pfmea_failure_mode": "Regulator voltage drift; power supply degradation",
+      "severity": "8",
+      "occurrence": "3",
+      "detection": "2",
+      "rpn": "48"
+    },
+    {
+      "char_id": "CH-015",
+      "step_id": "PS-05",
+      "char_number": "5.2",
+      "type": "Product",
+      "special_class": "Critical",
+      "specification": "FCT response time",
+      "tolerance": "< 50 ms from input to output (safety-critical)",
+      "gage_id": "G-005",
+      "sample_size": "all parts",
+      "sample_frequency": "continuous (100%)",
+      "control_method": "100% FCT timing measurement",
+      "reaction_plan_id": "RP-003",
+      "pfmea_ref": "PFMEA-003-FM-09",
+      "pfmea_failure_mode": "Response time exceeds safety margin",
+      "severity": "9",
+      "occurrence": "1",
+      "detection": "2",
+      "rpn": "18"
+    }
+  ],
+  "gages": [
+    {
+      "id": "G-001",
+      "name": "CMM - Faro Absolute Arm",
+      "type": "Variable",
+      "rr_method": "Gage R&R (3 appraisers, 10 parts, 3 repeats)",
+      "rr_target_pct": 10
+    },
+    {
+      "id": "G-002",
+      "name": "Thermocouple Array (Reflow Oven)",
+      "type": "Variable",
+      "rr_method": "Calibration cert (NIST traceable)",
+      "rr_target_pct": 5
+    },
+    {
+      "id": "G-003",
+      "name": "KY8030 AOI Camera System",
+      "type": "Attribute",
+      "rr_method": "Attribute Agreement Analysis (3 operators, 50 boards)",
+      "rr_target_pct": 90
+    },
+    {
+      "id": "G-004",
+      "name": "Spea TestJet Vista 4.5 ICT System",
+      "type": "Attribute",
+      "rr_method": "Attribute Agreement Analysis (3 operators, 30 boards)",
+      "rr_target_pct": 95
+    },
+    {
+      "id": "G-005",
+      "name": "ESC Dyno Test Stand",
+      "type": "Variable",
+      "rr_method": "Gage R&R (2 technicians, 5 units, 3 repeats)",
+      "rr_target_pct": 10
+    },
+    {
+      "id": "G-006",
+      "name": "Segger J-Link Programmer",
+      "type": "Attribute",
+      "rr_method": "CRC verification (pass/fail); built-in self-test",
+      "rr_target_pct": 100
+    },
+    {
+      "id": "G-007",
+      "name": "Manual visual + go/no-go gauge",
+      "type": "Attribute",
+      "rr_method": "Attribute Agreement Analysis (2 inspectors, 20 parts)",
+      "rr_target_pct": 95
+    },
+    {
+      "id": "G-008",
+      "name": "Visual inspection (lighting 500 lux, ruler)",
+      "type": "Attribute",
+      "rr_method": "Visual standard + attribute agreement (2 inspectors, 20 parts)",
+      "rr_target_pct": 90
+    },
+    {
+      "id": "G-009",
+      "name": "Barcode scanner + MES database",
+      "type": "Attribute",
+      "rr_method": "MES validation + manual audit (100% scan, 5% verify)",
+      "rr_target_pct": 99
+    },
+    {
+      "id": "G-010",
+      "name": "Visual inspection (LED light, magnifier)",
+      "type": "Attribute",
+      "rr_method": "Visual standard + attribute agreement (2 inspectors, 15 parts)",
+      "rr_target_pct": 85
+    },
+    {
+      "id": "G-011",
+      "name": "Solder paste tack force tester",
+      "type": "Variable",
+      "rr_method": "Gage calibration (force gauge NIST traceable)",
+      "rr_target_pct": 10
+    }
+  ],
+  "reaction_plans": [
+    {
+      "id": "RP-001",
+      "title": "Stop Production & Quarantine (Component Placement)",
+      "steps": "1. Stop CPM immediately. 2. Quarantine parts from last in-control signal. 3. Notify QE + supervisor. 4. Investigate: gage calibration, tool offset, vision system focus. 5. Run 5-part pilot; all in spec = restart. Out of spec = repeat root cause.",
+      "owner": "Quality Engineer",
+      "escalation": "Immediate stop; escalate to Plant Quality Manager if > 10% nonconforming"
+    },
+    {
+      "id": "RP-002",
+      "title": "Reflow Oven Temperature Adjustment",
+      "steps": "1. Trend visible in SPC chart (approaching limit). 2. Notify process engineer. 3. Adjust setpoint +/- 1-2°C. 4. Run 10 pilot boards; measure peak temp on all. 5. If centered, resume. If still drifting, investigate heater/sensor calibration.",
+      "owner": "Process Engineer",
+      "escalation": "If pilot fails, escalate to Stop & Investigate (RP-001)"
+    },
+    {
+      "id": "RP-003",
+      "title": "100% Inspection & Containment (Solder/ICT/FCT)",
+      "steps": "1. Hold current lot (do not ship). 2. 100% inspect (AOI if solder; ICT/FCT retest if fail). 3. Accept = release; Reject = quarantine for MRB. 4. Root cause: gage calibration, process drift, material lot. 5. Corrective action if needed; resume normal control.",
+      "owner": "Quality Engineer",
+      "escalation": "MRB if > 10% nonconforming; notify customer if delay > 4 hours"
+    },
+    {
+      "id": "RP-004",
+      "title": "Firmware Version Mismatch Recovery",
+      "steps": "1. Stop programming immediately if version mismatch detected. 2. Quarantine affected parts. 3. Verify programmer and software version on host PC. 4. Re-program with correct version. 5. Verify CRC = 0x12AB on 5 test parts. 6. 100% reprogram quarantined lot if needed.",
+      "owner": "Manufacturing Engineer",
+      "escalation": "Escalate to Quality Manager if > 50% of lot affected"
+    },
+    {
+      "id": "RP-005",
+      "title": "Poka-Yoke Connector Orientation Check",
+      "steps": "1. Operator notices jam (connector cannot insert). 2. Supervisor assesses: wrong orientation vs. worn fixture. 3. If wrong orientation, reorient and try again. If worn fixture, switch to backup tooling. 4. Run 5 pilot parts; all pass = resume. 5. Schedule fixture maintenance if > 2 jams per shift.",
+      "owner": "Supervisor/Manufacturing Engineer",
+      "escalation": "If > 5 jams/shift from fixture wear, escalate maintenance priority"
+    },
+    {
+      "id": "RP-006",
+      "title": "Label Audit & Rework",
+      "steps": "1. Operator finds label off-center or illegible. 2. Set aside and notify supervisor. 3. Rework: remove and reapply label. 4. Verify label now within spec. 5. Continue line; increase audit frequency to 100% next 50 parts.",
+      "owner": "Supervisor",
+      "escalation": "If > 10% of run affected, investigate label applicator calibration"
+    },
+    {
+      "id": "RP-007",
+      "title": "MES Traceability Scan Failure",
+      "steps": "1. Barcode scan fails or MES rejects serial #. 2. Stop line and notify supervisor. 3. Verify part serial is correct and readable. 4. Re-scan; if still fail, manually verify serial in MES. 5. Quarantine affected parts; investigate data entry error or MES bug.",
+      "owner": "Supervisor/IT Support",
+      "escalation": "If MES down > 30 min, escalate to plant IT and quality manager"
+    },
+    {
+      "id": "RP-008",
+      "title": "Solder Paste Tack Time Failure",
+      "steps": "1. Peel test shows tack time < 20 min. 2. Stop using current solder paste. 3. Open new paste spool; verify date code within 6 months. 4. Run tack test on new paste; must be > 20 min. 5. If OK, resume. If not, investigate paste supplier and storage conditions.",
+      "owner": "Manufacturing Engineer",
+      "escalation": "Escalate to Supplier Quality if paste issue confirmed (RP-003 template)"
+    }
+  ],
+  "spc_settings": [
+    {
+      "characteristic_id": "CH-001",
+      "chart_type": "Xbar-R",
+      "subgroup_size": 5,
+      "sampling_frequency": "every 1 hour or every 50 parts",
+      "reaction_plan_id": "RP-001"
+    },
+    {
+      "characteristic_id": "CH-002",
+      "chart_type": "Xbar-R",
+      "subgroup_size": 5,
+      "sampling_frequency": "every 1 hour or every 50 parts",
+      "reaction_plan_id": "RP-001"
+    },
+    {
+      "characteristic_id": "CH-003",
+      "chart_type": "Xbar-R",
+      "subgroup_size": 5,
+      "sampling_frequency": "every 1 hour or every 50 parts",
+      "reaction_plan_id": "RP-001"
+    },
+    {
+      "characteristic_id": "CH-004",
+      "chart_type": "p-chart",
+      "subgroup_size": 100,
+      "sampling_frequency": "every 4 hours or end of shift",
+      "reaction_plan_id": "RP-002"
+    },
+    {
+      "characteristic_id": "CH-014",
+      "chart_type": "p-chart",
+      "subgroup_size": 100,
+      "sampling_frequency": "daily (aggregate 100% ICT results)",
+      "reaction_plan_id": "RP-003"
+    }
+  ],
+  "mistake_proofing": [
+    {
+      "id": "PZ-001",
+      "characteristic": "CH-009 (Component orientation/polarity)",
+      "type": "Prevention",
+      "test_method": "Attempt to insert reversed part; verify jam/no-drop",
+      "audit_frequency": "monthly",
+      "owner": "Manufacturing Engineer"
+    }
+  ]
+}

@@ -1,0 +1,238 @@
+{
+  "project": {
+    "name": "ESC SW FMEA Demo",
+    "doc_id": "ESC-SW-FMEA-001",
+    "revision": "1.0",
+    "date": "2024-01-15",
+    "author": "Safety Engineer",
+    "approver": "Engineering Manager",
+    "target_asil": "D"
+  },
+  "linked_tsc": "TSC_ESC_demo.xlsx",
+  "linked_sw_arch": "SW_Arch_ESC.xlsx",
+  "target_asil": "D",
+  "swcs_override": [
+    {
+      "id": "SWC01",
+      "name": "ESC Application Controller",
+      "type": "Application",
+      "partition_id": "P_ASIL_D",
+      "asil": "D",
+      "language": "C"
+    },
+    {
+      "id": "SWC02",
+      "name": "Watchdog Service",
+      "type": "Service",
+      "partition_id": "P_ASIL_D",
+      "asil": "D",
+      "language": "C"
+    },
+    {
+      "id": "SWC03",
+      "name": "CAN Stack",
+      "type": "Service",
+      "partition_id": "P_QM",
+      "asil": "QM",
+      "language": "C"
+    },
+    {
+      "id": "SWC04",
+      "name": "PWM Output Driver",
+      "type": "Driver",
+      "partition_id": "P_ASIL_D",
+      "asil": "D",
+      "language": "C"
+    },
+    {
+      "id": "SWC05",
+      "name": "Sensor Input Diagnostics",
+      "type": "Diagnostic",
+      "partition_id": "P_QM",
+      "asil": "QM",
+      "language": "C"
+    }
+  ],
+  "failure_mode_overrides": [
+    {
+      "swc_id": "SWC01",
+      "failure_mode": "Deadline miss (task timeout)",
+      "severity": "S3",
+      "frequency": "Occasional",
+      "detection": "Window watchdog (TSC-SM04)",
+      "coverage": "High",
+      "mitigation": "Watchdog timer resets to safe state (cut power to motor brake valve); window = 50 ms"
+    },
+    {
+      "swc_id": "SWC01",
+      "failure_mode": "Illegal state (FSM violation)",
+      "severity": "S3",
+      "frequency": "Rare",
+      "detection": "Assertion on state variable; control flow monitor",
+      "coverage": "High",
+      "mitigation": "FSM design reviewed; all transitions verified in unit test; assertion coverage = 95%"
+    },
+    {
+      "swc_id": "SWC01",
+      "failure_mode": "Divide-by-zero / arithmetic exception",
+      "severity": "S2",
+      "frequency": "Occasional",
+      "detection": "Range check on denominator before division",
+      "coverage": "Medium",
+      "mitigation": "Assert wheel_slip ≠ 0 before denominator calculation; boundary test with slip = 0.001"
+    },
+    {
+      "swc_id": "SWC01",
+      "failure_mode": "NaN propagation (invalid float state)",
+      "severity": "S2",
+      "frequency": "Rare",
+      "detection": "NaN / infinity detection (isnan() check); watchdog on output range",
+      "coverage": "High",
+      "mitigation": "Filter output checked for NaN at exit; any NaN cuts motor power; test with sqrt(-1) injection"
+    },
+    {
+      "swc_id": "SWC01",
+      "failure_mode": "Stack overflow / heap exhaustion",
+      "severity": "S3",
+      "frequency": "Rare",
+      "detection": "Stack partitioning (MPU) + guard page; watchdog on CPU stall",
+      "coverage": "High",
+      "mitigation": "Separate stack partition per task; guard page at stack limit; stack depth analysis < 80% utilization"
+    },
+    {
+      "swc_id": "SWC01",
+      "failure_mode": "Configuration corruption (persistent state loss)",
+      "severity": "S2",
+      "frequency": "Rare",
+      "detection": "CRC check on EEPROM config block (TSC-SM07)",
+      "coverage": "High",
+      "mitigation": "Config block CRC verified at startup; any mismatch loads default calibration; test with bit flip injection"
+    },
+    {
+      "swc_id": "SWC02",
+      "failure_mode": "Missed periodic execution",
+      "severity": "S1",
+      "frequency": "Occasional",
+      "detection": "Watchdog cycle counter; periodic heartbeat signal",
+      "coverage": "High",
+      "mitigation": "Each watchdog cycle increments counter; counter polled by monitor; missed cycle detected in < 100 ms"
+    },
+    {
+      "swc_id": "SWC02",
+      "failure_mode": "Race condition (shared resource)",
+      "severity": "S2",
+      "frequency": "Rare",
+      "detection": "Mutex protection on watchdog register access",
+      "coverage": "High",
+      "mitigation": "Critical section around watchdog reset; mutual exclusion enforced by OS; race condition test with concurrent tasks"
+    },
+    {
+      "swc_id": "SWC02",
+      "failure_mode": "Mutex deadlock / starvation",
+      "severity": "S3",
+      "frequency": "Rare",
+      "detection": "Timeout on mutex acquire; deadlock detection monitor",
+      "coverage": "Medium",
+      "mitigation": "Mutex timeout = 10 ms; if timeout, exception handler invokes watchdog reset; lock ordering policy enforced in code review"
+    },
+    {
+      "swc_id": "SWC02",
+      "failure_mode": "Resource leak (memory / handles)",
+      "severity": "S2",
+      "frequency": "Rare",
+      "detection": "Heap profiling; memory high-water mark monitor",
+      "coverage": "Medium",
+      "mitigation": "No dynamic allocation in watchdog service (fixed memory); heap test run for 100 hours; no growth observed"
+    },
+    {
+      "swc_id": "SWC03",
+      "failure_mode": "Missed periodic execution",
+      "severity": "S1",
+      "frequency": "Occasional",
+      "detection": "CAN message heartbeat timeout in downstream receiver",
+      "coverage": "Medium",
+      "mitigation": "CAN transmit scheduled every 10 ms; downstream monitor timeout = 30 ms; missed TX detected by receiver"
+    },
+    {
+      "swc_id": "SWC03",
+      "failure_mode": "Race condition (shared resource)",
+      "severity": "S3",
+      "frequency": "Rare",
+      "detection": "E2E protection (CRC + sequence counter) on CAN frame; TSC-SM13",
+      "coverage": "High",
+      "mitigation": "CAN TX register guarded by mutex; each frame has sequence counter; receiver detects out-of-order or duplicate via E2E"
+    },
+    {
+      "swc_id": "SWC04",
+      "failure_mode": "Incorrect register write",
+      "severity": "S3",
+      "frequency": "Rare",
+      "detection": "Readback + compare on PWM control register",
+      "coverage": "High",
+      "mitigation": "After each PWM duty cycle write, read register and verify match; mismatch triggers error handler and safe state"
+    },
+    {
+      "swc_id": "SWC04",
+      "failure_mode": "Missed interrupt (ISR deferred)",
+      "severity": "S2",
+      "frequency": "Occasional",
+      "detection": "ISR latency instrumentation; event queue overflow counter",
+      "coverage": "Medium",
+      "mitigation": "PWM ISR priority = high; latency measurement < 10% of PWM period; event queue size = 10 (overflow rare)"
+    },
+    {
+      "swc_id": "SWC04",
+      "failure_mode": "Stuck busy bit / peripheral timeout",
+      "severity": "S2",
+      "frequency": "Rare",
+      "detection": "Timeout counter on PWM busy-wait loop",
+      "coverage": "High",
+      "mitigation": "Timeout = 2× worst-case PWM latency per datasheet; if timeout, error handler invokes safe state"
+    },
+    {
+      "swc_id": "SWC04",
+      "failure_mode": "Transmit underrun / receive overrun",
+      "severity": "S2",
+      "frequency": "Rare",
+      "detection": "DMA buffer watermark monitor; DMA error interrupt",
+      "coverage": "Medium",
+      "mitigation": "DMA buffer pre-allocated; watermark flag if < 20 bytes available; interrupt driven to refill before underrun"
+    },
+    {
+      "swc_id": "SWC05",
+      "failure_mode": "False positive (nuisance DTC)",
+      "severity": "S0",
+      "frequency": "Occasional",
+      "detection": "Multi-sample confirmation (fault must persist for 3 consecutive samples)",
+      "coverage": "Medium",
+      "mitigation": "DTC threshold = sensor nominal ± 10%; multi-sample counter = 3; noise filtered before comparison"
+    },
+    {
+      "swc_id": "SWC05",
+      "failure_mode": "False negative (missed fault)",
+      "severity": "S2",
+      "frequency": "Rare",
+      "detection": "Self-test (built-in test) on sensor output; dual-threshold comparison",
+      "coverage": "High",
+      "mitigation": "Sensor self-test every 100 ms; dual threshold (static + dynamic); fault detected within 500 ms"
+    },
+    {
+      "swc_id": "SWC05",
+      "failure_mode": "Priority inversion (DTC order wrong)",
+      "severity": "S0",
+      "frequency": "Rare",
+      "detection": "DTC priority matrix documented; review of DTC order",
+      "coverage": "High",
+      "mitigation": "DTC priority: sensor fault > communication fault > self-test fault; matrix reviewed by diagnostics engineer"
+    },
+    {
+      "swc_id": "SWC05",
+      "failure_mode": "Log corruption / rollover",
+      "severity": "S0",
+      "frequency": "Rare",
+      "detection": "CRC on diagnostic log block (TSC-SM07); log fullness counter",
+      "coverage": "High",
+      "mitigation": "DTC history = 100 entries max; oldest entry rotated out on overflow; CRC verified on each read"
+    }
+  ]
+}

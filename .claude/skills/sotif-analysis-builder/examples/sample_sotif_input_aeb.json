@@ -1,0 +1,217 @@
+{
+  "system": {
+    "name": "Autonomous Emergency Braking",
+    "abbr": "AEB",
+    "project": "HV2024",
+    "doc_id": "SOT-AEB-001",
+    "revision": "0.1",
+    "date": "2026-05-01",
+    "author": "Safety Team"
+  },
+  "functions": [
+    {
+      "id": "F01",
+      "name": "Forward Collision Detection",
+      "description": "Detect vehicles ahead and compute collision risk",
+      "kinetic_authority": "high"
+    },
+    {
+      "id": "F02",
+      "name": "Autonomous Emergency Brake",
+      "description": "Apply brake autonomously if collision imminent",
+      "kinetic_authority": "high"
+    }
+  ],
+  "odd_definition": {
+    "scenery": [
+      {
+        "code": "S01",
+        "category": "Road Type",
+        "description": "Paved highway, urban streets, suburban roads"
+      },
+      {
+        "code": "S02",
+        "category": "Lane Markings",
+        "description": "Visible lane markings, well-maintained road surface"
+      }
+    ],
+    "environment": [
+      {
+        "code": "E01",
+        "category": "Lighting",
+        "description": "Daylight, dusk, dawn; not night operation"
+      },
+      {
+        "code": "E02",
+        "category": "Weather",
+        "description": "Dry, wet road; not heavy rain, snow, or fog"
+      }
+    ],
+    "dynamic_elements": [
+      {
+        "code": "D01",
+        "category": "Other Road Users",
+        "description": "Cars, trucks on predictable trajectories"
+      }
+    ],
+    "driver_state": [
+      {
+        "code": "DR01",
+        "category": "Engagement",
+        "description": "Driver monitoring; handoff expected within 2 seconds"
+      }
+    ]
+  },
+  "performance_limitations": [
+    {
+      "function_id": "F01",
+      "limitation_id": "L01",
+      "sensor_type": "Camera",
+      "description": "Cannot reliably detect stationary vehicles beyond 100m in standard light",
+      "impact_summary": "Collision detection latency increases with distance; closing-speed misestimation possible"
+    },
+    {
+      "function_id": "F01",
+      "limitation_id": "L02",
+      "sensor_type": "Camera",
+      "description": "Low contrast (dawn/dusk) reduces confidence; high glare saturates sensor",
+      "impact_summary": "Function disabled during extreme lighting conditions per design"
+    },
+    {
+      "function_id": "F02",
+      "limitation_id": "L03",
+      "sensor_type": "Brake Actuator",
+      "description": "Brake response time 200ms from command to pressure increase",
+      "impact_summary": "At 100 km/h, 200ms corresponds to 5.5m stopping distance; deceleration ramp-up non-instantaneous"
+    }
+  ],
+  "functional_insufficiencies": [
+    {
+      "insufficiency_id": "I01",
+      "function_id": "F01",
+      "type": "Sensor",
+      "description": "Camera unable to detect motorcycles in lateral fields due to small profile",
+      "root_cause": "Training data underrepresented motorcycles; algorithm confidence threshold too high"
+    },
+    {
+      "insufficiency_id": "I02",
+      "function_id": "F01",
+      "type": "Algorithmic",
+      "description": "Object tracking fails when target temporarily occluded (bridge pillars, construction cones)",
+      "root_cause": "Single-frame CNN; no temporal filtering; track reset on occlusion"
+    },
+    {
+      "insufficiency_id": "I03",
+      "function_id": "F02",
+      "type": "System",
+      "description": "Brake pressure demand conflicts with driver brake pedal input (unresolved in hybrid scenarios)",
+      "root_cause": "Brake blending logic not validated for high-g collision avoidance + driver override"
+    }
+  ],
+  "triggering_conditions": {
+    "environmental": [
+      {
+        "id": "TC-E01",
+        "description": "Heavy rain (visibility <50m, wet road surface)",
+        "likelihood": "< 1% of operating time"
+      },
+      {
+        "id": "TC-E02",
+        "description": "Sun glare (low sun angle, camera sensor saturation)",
+        "likelihood": "< 5% of operating time"
+      }
+    ],
+    "sensor": [
+      {
+        "id": "TC-S01",
+        "description": "Lens contamination (water droplets, dust, condensation)",
+        "likelihood": "< 10% of operating time in wet climates"
+      }
+    ],
+    "road_user": [
+      {
+        "id": "TC-R01",
+        "description": "Motorcycle approaching from adjacent lane (high speed, small profile)",
+        "likelihood": "Varies by traffic composition"
+      },
+      {
+        "id": "TC-R02",
+        "description": "Pedestrian in non-standard pose (lying on road, unusual clothing)",
+        "likelihood": "Rare (<0.01% of scenarios)"
+      }
+    ],
+    "system_state": [
+      {
+        "id": "TC-SY01",
+        "description": "Sensor warm-up phase (first 10 seconds after startup)",
+        "likelihood": "Rare in normal operation"
+      }
+    ],
+    "driver_state": [
+      {
+        "id": "TC-D01",
+        "description": "Driver distraction; hands-off wheel detected",
+        "likelihood": "Variable; depends on enforcement"
+      }
+    ],
+    "combined": [
+      {
+        "id": "TC-C01",
+        "description": "Heavy rain + dawn + motorcycle in adjacent lane",
+        "likelihood": "Very rare (<0.001%)"
+      }
+    ]
+  },
+  "hazardous_behaviors": [
+    {
+      "function_id": "F01",
+      "insufficiency_id": "I01",
+      "triggering_condition_id": "TC-R01",
+      "hazard_description": "Motorcycle not detected; AEB not triggered; rear-end collision if motorcycle decelerates",
+      "severity": "High"
+    },
+    {
+      "function_id": "F02",
+      "insufficiency_id": "I03",
+      "triggering_condition_id": "TC-D01",
+      "hazard_description": "Unintended brake surge due to driver pedal conflict; whiplash or secondary collision risk",
+      "severity": "Medium"
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "SC-01",
+      "function_id": "F01",
+      "insufficiency_id": "I01",
+      "triggering_condition_ids": "TC-R01",
+      "quadrant": "Unknown Unsafe",
+      "evidence": "Motorcycle profiles underrepresented in training dataset; field reports confirm misdetections"
+    },
+    {
+      "scenario_id": "SC-02",
+      "function_id": "F02",
+      "insufficiency_id": "I03",
+      "triggering_condition_ids": "TC-D01",
+      "quadrant": "Unknown Unsafe",
+      "evidence": "HIL testing shows pressure conflict in high-g scenarios; user complaints in field data"
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "safety_goal_id": "SG-01",
+      "function_id": "F01",
+      "criterion_description": "Probability of undetected collision threat (motorcycle scenario) shall be less than 1e-7 per operating hour",
+      "threshold": "1e-7",
+      "unit": "per operating hour",
+      "rationale": "SOTIF concept phase target; validation via fleet data and scenario testing"
+    },
+    {
+      "safety_goal_id": "SG-02",
+      "function_id": "F02",
+      "criterion_description": "Probability of unintended brake activation (due to system conflict) shall be less than 5e-8 per operating hour",
+      "threshold": "5e-8",
+      "unit": "per operating hour",
+      "rationale": "Residual risk target for brake pressure blending; justified by simulation + field testing"
+    }
+  ]
+}

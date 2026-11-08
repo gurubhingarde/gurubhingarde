@@ -1,0 +1,115 @@
+{
+  "process": {
+    "process_id": "SWE.1",
+    "process_name": "Software Implementation",
+    "purpose": "Implement software units and integrate into software components",
+    "scope": "All software coding and unit testing activities",
+    "inputs": "Software design specification, coding standards",
+    "outputs": "Implemented software units, unit test results",
+    "owner": "Software Development Lead",
+    "roles": "Senior Developer, Code Reviewer, QA Engineer",
+    "period": "2025-01-01 to 2025-04-30"
+  },
+  "base_practices": [
+    {
+      "bp_id": "BP1",
+      "text": "Implement software units according to design specification",
+      "evidence_type": "Source code repository, design traceability",
+      "reference": "Repository: /sw/vcm/trunk, design v2.3",
+      "accessible": "Y"
+    },
+    {
+      "bp_id": "BP2",
+      "text": "Execute unit tests and record results",
+      "evidence_type": "Test execution reports",
+      "reference": "Test reports: /qa/unittest/results/Q1_2025",
+      "accessible": "Y"
+    }
+  ],
+  "generic_practices": [
+    {
+      "gp_id": "GP1",
+      "cl": 2,
+      "text": "Manage work products",
+      "evidence_type": "Version control logs",
+      "reference": "SVN logs: /sw/vcm/trunk",
+      "accessible": "Y"
+    }
+  ],
+  "work_products": [
+    {
+      "id": "WP1",
+      "type": "Source code",
+      "location": "Repository: /sw/vcm/trunk",
+      "vc": "SVN version control",
+      "owner": "Development Team"
+    },
+    {
+      "id": "WP2",
+      "type": "Unit test results",
+      "location": "Share: /qa/unittest/results",
+      "vc": "Automated reports",
+      "owner": "QA Team"
+    }
+  ],
+  "performance_records": [
+    {
+      "id": "PR1",
+      "type": "Code review minutes",
+      "date": "2025-02-14",
+      "findings": "18 units reviewed, 7 findings, all closed before merge",
+      "location": "Share: /qa/reviews/2025-02"
+    },
+    {
+      "id": "PR2",
+      "type": "Unit test action log",
+      "date": "2025-04-11",
+      "findings": "3 blocking defects raised, 3 closed, retest passed",
+      "location": "Tracker: SWE1-ACT-2025Q1"
+    }
+  ],
+  "quantitative_metrics": [
+    {
+      "metric": "Cycle Time",
+      "period": "2025 Q1",
+      "value": "6.4 days",
+      "target": "<= 7 days",
+      "status": "Met"
+    },
+    {
+      "metric": "Defect Rate",
+      "period": "2025 Q1",
+      "value": "0.42 def/KLOC",
+      "target": "<= 0.50",
+      "status": "Met"
+    },
+    {
+      "metric": "Completeness",
+      "period": "2025 Q1",
+      "value": "97%",
+      "target": ">= 95%",
+      "status": "Met"
+    },
+    {
+      "metric": "Compliance",
+      "period": "2025 Q1",
+      "value": "91%",
+      "target": ">= 95%",
+      "status": "Not met"
+    }
+  ],
+  "improvements": [
+    {
+      "id": "IMP1",
+      "description": "Added static analysis gate to the merge pipeline",
+      "date": "2025-03-03",
+      "impact": "Defect rate down from 0.61 to 0.42 def/KLOC in the following period"
+    },
+    {
+      "id": "IMP2",
+      "description": "Review checklist updated with coding-standard clauses most often missed",
+      "date": "2025-04-22",
+      "impact": "Compliance trend improving; re-measure in 2025 Q2"
+    }
+  ]
+}

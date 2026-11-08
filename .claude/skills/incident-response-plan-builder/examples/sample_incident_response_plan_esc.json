@@ -1,0 +1,124 @@
+{
+  "org": {
+    "name": "Acme Motors ESC System",
+    "doc_id": "IRP-ESC-2024-001",
+    "revision": "1.0",
+    "date": "2024-05-01",
+    "psirt_lead": "Dr. Alice Security",
+    "company": "Acme Motors Inc.",
+    "target_cal": "CAL 2"
+  },
+  "psirt_roster": [
+    {
+      "name": "Dr. Alice Security",
+      "role": "PSIRT Manager",
+      "org": "Acme Motors Cybersecurity",
+      "email": "alice.security@acmemotors.com",
+      "phone": "+1-555-0101",
+      "oncall": "Monday–Tuesday (primary), Friday–Saturday (backup)"
+    },
+    {
+      "name": "Bob Chen",
+      "role": "Triage Engineer",
+      "org": "Acme Motors Security Operations",
+      "email": "bob.chen@acmemotors.com",
+      "phone": "+1-555-0102",
+      "oncall": "Wednesday–Thursday (primary), Sunday (backup)"
+    },
+    {
+      "name": "Carol Martinez",
+      "role": "Comms Lead",
+      "org": "Acme Motors Communications",
+      "email": "carol.martinez@acmemotors.com",
+      "phone": "+1-555-0103",
+      "oncall": "Tuesday–Wednesday (primary), Saturday–Sunday (backup)"
+    },
+    {
+      "name": "David Lee",
+      "role": "Legal",
+      "org": "Acme Motors Legal Department",
+      "email": "david.lee@acmemotors.com",
+      "phone": "+1-555-0104",
+      "oncall": "Monday–Friday (on-call hours), Saturday–Sunday (emergency only)"
+    },
+    {
+      "name": "Eva Rodriguez",
+      "role": "Engineering Rep",
+      "org": "Acme Motors ESC Engineering",
+      "email": "eva.rodriguez@acmemotors.com",
+      "phone": "+1-555-0105",
+      "oncall": "Monday–Friday (standard), 24/7 during incident response"
+    }
+  ],
+  "severity_thresholds": [
+    {
+      "severity": "Critical",
+      "cvss_min": 9.0,
+      "cvss_max": 10.0,
+      "sla_response_h": 1,
+      "sla_comm_h": 2,
+      "sla_fix_d": 1
+    },
+    {
+      "severity": "High",
+      "cvss_min": 7.0,
+      "cvss_max": 8.9,
+      "sla_response_h": 4,
+      "sla_comm_h": 8,
+      "sla_fix_d": 7
+    },
+    {
+      "severity": "Medium",
+      "cvss_min": 4.0,
+      "cvss_max": 6.9,
+      "sla_response_h": 24,
+      "sla_comm_h": 48,
+      "sla_fix_d": 30
+    },
+    {
+      "severity": "Low",
+      "cvss_min": 0.1,
+      "cvss_max": 3.9,
+      "sla_response_h": 72,
+      "sla_comm_h": 168,
+      "sla_fix_d": 90
+    }
+  ],
+  "regulators": [
+    {
+      "regulator": "UN R155 (ECE)",
+      "trigger": "Critical vulnerability affecting cybersecurity requirements",
+      "deadline_h": 72,
+      "content_required": "Incident description, impact assessment, remediation plan, customer communication",
+      "owner": "Legal / PSIRT Manager"
+    },
+    {
+      "regulator": "ENISA (EU Cybersecurity Act)",
+      "trigger": "Material security incident or personal data breach affecting EU customers",
+      "deadline_h": 72,
+      "content_required": "Breach notification, data subjects affected, mitigation measures, DPA contact",
+      "owner": "Legal / Comms Lead"
+    },
+    {
+      "regulator": "NHTSA (US)",
+      "trigger": "Safety-related defect found via cybersecurity incident",
+      "deadline_h": 120,
+      "content_required": "Defect description, affected vehicles (count and model years), remedy plan, FMVSS citation",
+      "owner": "Legal / Engineering Rep"
+    },
+    {
+      "regulator": "JAMA (Japan)",
+      "trigger": "Cybersecurity incident affecting vehicles sold in Japan",
+      "deadline_h": 168,
+      "content_required": "Japanese translation of incident details, affected models, remedy timeline, customer action",
+      "owner": "Comms Lead / Legal"
+    },
+    {
+      "regulator": "CCAS (China Cybersecurity Association)",
+      "trigger": "Cybersecurity incident affecting vehicles sold or manufactured in China",
+      "deadline_h": 168,
+      "content_required": "Chinese translation of incident report, technical details (CVSS), remediation plan, economic impact",
+      "owner": "Legal / Engineering Rep"
+    }
+  ]
+}

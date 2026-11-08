@@ -1,0 +1,63 @@
+{
+  "metadata": {
+    "system": "Electronic Stability Control (ESC)",
+    "version": "1.0",
+    "created": "2024-01-15"
+  },
+  "nodes": [
+    {
+      "id": "N01",
+      "name": "CAN Gateway",
+      "type": "gateway",
+      "cal_relevant": true,
+      "inputs": ["veh_can"],
+      "outputs": ["esc_ecu"],
+      "shared_resources": ["12V_supply", "ground"]
+    },
+    {
+      "id": "N02",
+      "name": "ESC Main MCU",
+      "type": "ecu",
+      "cal_relevant": true,
+      "inputs": ["wheel_speed_A", "wheel_speed_B", "imu_signal", "brake_request"],
+      "outputs": ["brake_cmd_front", "brake_cmd_rear", "status_msg"],
+      "shared_resources": ["12V_supply", "ground", "system_clock"]
+    },
+    {
+      "id": "N03",
+      "name": "Secure Boot ROM",
+      "type": "memory",
+      "cal_relevant": true,
+      "inputs": [],
+      "outputs": [],
+      "shared_resources": ["12V_supply"]
+    },
+    {
+      "id": "N04",
+      "name": "OTA Firmware Update Agent",
+      "type": "processor",
+      "cal_relevant": true,
+      "inputs": ["update_msgs"],
+      "outputs": ["flash_image"],
+      "shared_resources": ["12V_supply", "ground"]
+    },
+    {
+      "id": "N05",
+      "name": "Cryptographic Key Store",
+      "type": "key_store",
+      "cal_relevant": true,
+      "inputs": [],
+      "outputs": [],
+      "shared_resources": ["12V_supply", "secure_clock"]
+    },
+    {
+      "id": "N06",
+      "name": "Debug Interface (JTAG)",
+      "type": "debug_if",
+      "cal_relevant": true,
+      "inputs": [],
+      "outputs": [],
+      "shared_resources": []
+    }
+  ]
+}

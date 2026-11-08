@@ -1,0 +1,36 @@
+{
+  "config": {
+    "project_name": "Vehicle Control Module",
+    "date": "2025-05-01",
+    "owner": "Process Improvement Lead"
+  },
+  "processes": [
+    {
+      "process_id": "SYS.1",
+      "process_name": "System Concept",
+      "current_cl": 1,
+      "target_cl": 2,
+      "justification": "OEM requirement for managed process capability",
+      "missing_pas": "PA2.1 (Performance Management), PA2.2 (Work Product Management)",
+      "gap_description": "System concept process lacks formal management of performance and work products"
+    },
+    {
+      "process_id": "SWE.1",
+      "process_name": "Software Implementation",
+      "current_cl": 2,
+      "target_cl": 3,
+      "justification": "Competitive requirement for process establishment",
+      "missing_pas": "PA3.1 (Process Definition), PA3.2 (Process Deployment)",
+      "gap_description": "SW implementation process requires formal definition and deployment infrastructure"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "GAP-001",
+      "description": "System concept process lacks performance management",
+      "severity": "Major",
+      "impact": "Cannot track system concept execution effectiveness",
+      "mitigation": "Implement performance management metrics and reviews"
+    }
+  ]
+}

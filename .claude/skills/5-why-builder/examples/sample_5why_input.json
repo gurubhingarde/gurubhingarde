@@ -1,0 +1,108 @@
+{
+  "problem": {
+    "id": "PROD-2026-0089",
+    "statement": "PCB component shift detected in final inspection: resistor R42 (10k) positioned 0.8 mm off-center on pad, causing open circuit in biasing network.",
+    "owner": "Manufacturing Engineer",
+    "date": "2026-04-18",
+    "observed_effect": "Biasing network open circuit; downstream analog circuit fails self-test during power-on.",
+    "impact": "Yield loss: 2.3% of production lot (115 units); customer warranty risk."
+  },
+  "why_tree": [
+    {
+      "level": 1,
+      "question": "Why did the resistor shift during assembly?",
+      "answer": "Pick-and-place nozzle pressure was set too high, causing lateral acceleration when nozzle released component.",
+      "branch_id": "B1",
+      "parent_branch": "ROOT"
+    },
+    {
+      "level": 2,
+      "question": "Why was nozzle pressure set incorrectly?",
+      "answer": "Machine parameter settings were not updated when component supplier changed from 0603 metric to 0603 imperial (slightly different dimensions and mass).",
+      "branch_id": "B1.1",
+      "parent_branch": "B1"
+    },
+    {
+      "level": 3,
+      "question": "Why were settings not updated for new supplier?",
+      "answer": "No procedure existed to validate machine settings during supplier changeover; ECN process did not include manufacturing engineering review.",
+      "branch_id": "B1.1.1",
+      "parent_branch": "B1.1"
+    },
+    {
+      "level": 4,
+      "question": "Why was there no manufacturing review step?",
+      "answer": "ECN process template was last updated 3 years ago; no one realized component sourcing changes required machine parameter validation.",
+      "branch_id": "B1.1.1.1",
+      "parent_branch": "B1.1.1"
+    },
+    {
+      "level": 5,
+      "question": "Root cause: Why has the ECN process not been updated?",
+      "answer": "Process documentation ownership was unclear after recent organizational restructuring; no quarterly review was scheduled.",
+      "branch_id": "B1.1.1.1.1",
+      "parent_branch": "B1.1.1.1"
+    }
+  ],
+  "root_causes": [
+    {
+      "cause": "ECN process lacks manufacturing engineering review step for component sourcing changes.",
+      "evidence": "Reviewed 5 prior ECNs: supplier changes approved by procurement/quality without manufacturing validation. No machine parameter impact assessment documented.",
+      "contributing_factors": "Process owner unclear after reorganization; no scheduled quarterly review; component mass/dimension differences not flagged as design-critical."
+    },
+    {
+      "cause": "No automated supplier component datasheet comparison tool; dimensional and mass data manually compared (missed 0.15 mm difference).",
+      "evidence": "Manual spreadsheet review process; no delta-check step; tolerance stack-up analysis not triggered until assembly issue appeared.",
+      "contributing_factors": "Datasheet management tool not yet deployed; IT resources redirected to other projects."
+    }
+  ],
+  "corrective_actions": [
+    {
+      "root_cause_id": "RC-001",
+      "action": "Add Manufacturing Engineering sign-off step to ECN process for all component sourcing changes (new supplier, new part number, dimension/mass changes). Require machine parameter impact assessment.",
+      "owner": "Process Engineering",
+      "target_date": "2026-05-15",
+      "verification_method": "Audit 10 future ECNs; confirm manufacturing review completed and documented."
+    },
+    {
+      "root_cause_id": "RC-002",
+      "action": "Implement automated component datasheet comparison tool (use supplier PDM API); alert on any dimension/mass delta >0.05 mm or >5 mg.",
+      "owner": "Engineering IT / Procurement",
+      "target_date": "2026-06-30",
+      "verification_method": "Tool deployed; test case: detect 0.15 mm difference in historical changeover."
+    },
+    {
+      "root_cause_id": "RC-001",
+      "action": "Assign clear process owner for ECN document; establish quarterly review cycle (next review: 2026-06-01).",
+      "owner": "Quality Manager",
+      "target_date": "2026-05-01",
+      "verification_method": "Process owner name and review schedule documented in management system."
+    }
+  ],
+  "verification": [
+    {
+      "action_id": "CA-001",
+      "metric": "ECN completion time (with manufacturing review)",
+      "baseline": "3 business days (before review step)",
+      "target": "5 business days (with review step)",
+      "actual": "",
+      "decision": ""
+    },
+    {
+      "action_id": "CA-001",
+      "metric": "% of component sourcing ECNs with manufacturing review documented",
+      "baseline": "0% (prior)",
+      "target": "100%",
+      "actual": "",
+      "decision": ""
+    },
+    {
+      "action_id": "CA-003",
+      "metric": "Process owner assigned and review scheduled",
+      "baseline": "No (unclear ownership)",
+      "target": "Yes (owner name and dates confirmed)",
+      "actual": "",
+      "decision": ""
+    }
+  ]
+}

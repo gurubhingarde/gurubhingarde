@@ -1,0 +1,802 @@
+{
+  "item": {
+    "name": "Electronic Stability Control",
+    "abbr": "ESC",
+    "project": "Demo Vehicle Platform",
+    "doc_id": "TARA-ESC-001",
+    "revision": "0.1",
+    "date": "2026-05-01",
+    "author": "Security Team",
+    "approver": "Engineering Manager",
+    "company": "Demo Automotive"
+  },
+  "target_cal": "3",
+  "scope_description": "Electronic Stability Control (ESC) module provides vehicle stability enhancement via coordinated brake and engine control. Scope includes firmware, calibration, CAN message processing, and diagnostic interfaces. Excludes brake and powertrain ECU implementation.",
+  "scope_boundary_notes": "ESC ECU receives wheel speed, yaw rate, and steering angle inputs; outputs brake and torque requests to brake and powertrain systems. External interfaces: CAN-HS (vehicle network), CAN-LS (comfort network), OBD-II diagnostics, JTAG/SWD debug port, serial bootloader.",
+  "assumptions": [
+    {
+      "id": "A01",
+      "category": "Item Scope",
+      "assumption": "ESC ECU firmware, calibration, and internal state. OTA updates assumed to be supplied by secure infrastructure (separate TARA).",
+      "rationale": "Scope boundary per item definition."
+    },
+    {
+      "id": "A02",
+      "category": "Attacker Model",
+      "assumption": "Threat agent ranges from casual hacker to organized crime; nation-state modeling out of scope for CAL 3.",
+      "rationale": "CAL 3 per target; CAL 4 would extend to nation-state."
+    },
+    {
+      "id": "A03",
+      "category": "Connectivity",
+      "assumption": "Vehicle assumed to have OBD-II port, CAN-HS, and debug interface accessible via service tools.",
+      "rationale": "Modern vehicle assumption; physical access required for most debug vectors."
+    },
+    {
+      "id": "A04",
+      "category": "Attacker Access",
+      "assumption": "Attacker may have: (1) remote access via OBD-II/CAN if unlocked, (2) physical access during service, (3) supply-chain access if trusted.",
+      "rationale": "Threat model assumption; supply chain security assessed separately."
+    }
+  ],
+  "cyber_interfaces": [
+    {
+      "id": "CI01",
+      "interface": "CAN-HS (Vehicle Network)",
+      "direction": "Bidirectional",
+      "protocol": "ISO 11898-1 / ISO 11783",
+      "description": "High-speed CAN bus carrying vehicle control messages (wheel speed, brake request, steering angle). ESC receives sensors, outputs brake/torque requests."
+    },
+    {
+      "id": "CI02",
+      "interface": "OBD-II Diagnostics (ISO 14229 / UDS)",
+      "direction": "Bidirectional",
+      "protocol": "ISO 14229-1 (UDS), CAN transport",
+      "description": "Onboard diagnostics port for reading DTCs, data streaming, and routine control. Accessible via standard scan tool."
+    },
+    {
+      "id": "CI03",
+      "interface": "JTAG / SWD Debug Port",
+      "direction": "Master-Slave",
+      "protocol": "IEEE 1149.1 JTAG / ARM SWD",
+      "description": "Manufacturer debug interface for firmware programming, memory access, breakpoints. Intended for development only; should be disabled in production."
+    },
+    {
+      "id": "CI04",
+      "interface": "Serial Bootloader",
+      "direction": "Bidirectional",
+      "protocol": "Custom bootloader protocol (115200 baud UART)",
+      "description": "Low-level firmware update via serial port. Used during manufacturing and field updates."
+    }
+  ],
+  "assets": [
+    {
+      "id": "AS01",
+      "name": "ESC Firmware Image",
+      "location": "Flash memory (0x8000000-0x807FFFF)",
+      "asset_type": "Firmware",
+      "properties": ["I", "A"],
+      "rationale": "Core executable code; integrity critical, availability critical (loss disables ESC)."
+    },
+    {
+      "id": "AS02",
+      "name": "Calibration Data",
+      "location": "Flash memory (0x8080000-0x8085FFF)",
+      "asset_type": "Data Store",
+      "properties": ["I"],
+      "rationale": "Tuning parameters (gain, limits, thresholds); tampering changes vehicle behavior."
+    },
+    {
+      "id": "AS03",
+      "name": "Secure Boot Key (RSA-2048 public)",
+      "location": "OTP ROM (immutable)",
+      "asset_type": "Cryptographic Key",
+      "properties": ["I", "A"],
+      "rationale": "Firmware signature verification; integrity and availability critical."
+    },
+    {
+      "id": "AS04",
+      "name": "Diagnostic Credentials",
+      "location": "Flash EEPROM",
+      "asset_type": "Credential",
+      "properties": ["C", "I"],
+      "rationale": "Access control for DTC read/clear and data streaming; confidentiality and integrity protect against unauthorized diagnostics."
+    },
+    {
+      "id": "AS05",
+      "name": "CAN Message State (wheel speed, yaw rate, steering)",
+      "location": "RAM (0x20000000+)",
+      "asset_type": "Data Store",
+      "properties": ["I", "A"],
+      "rationale": "Real-time sensor data; tampering leads to erratic control; loss of sensor communication triggers safe state."
+    },
+    {
+      "id": "AS06",
+      "name": "Debug Interface (JTAG/SWD)",
+      "location": "On-chip JTAG TAP",
+      "asset_type": "Hardware Interface",
+      "properties": ["C", "I"],
+      "rationale": "Allows unrestricted memory read/write; confidentiality and integrity critical if activated."
+    },
+    {
+      "id": "AS07",
+      "name": "OTA Update Package Signing Key",
+      "location": "Secure enclave (HSM assumed)",
+      "asset_type": "Cryptographic Key",
+      "properties": ["C", "I"],
+      "rationale": "Private key for signing firmware updates; confidentiality and integrity critical (loss enables arbitrary firmware injection)."
+    },
+    {
+      "id": "AS08",
+      "name": "Diagnostic Trouble Codes (DTC)",
+      "location": "Flash NVM (battery-backed)",
+      "asset_type": "Data Store",
+      "properties": ["I", "Auth"],
+      "rationale": "Maintenance history; tampering masks failures; authenticity ensures DTC credibility to technician."
+    },
+    {
+      "id": "AS09",
+      "name": "Immobilizer Secret (if co-integrated)",
+      "location": "OTP ROM or Secure enclave",
+      "asset_type": "Cryptographic Key",
+      "properties": ["C"],
+      "rationale": "Vehicle anti-theft; confidentiality critical (loss enables vehicle theft)."
+    }
+  ],
+  "threat_scenarios": [
+    {
+      "id": "TS01",
+      "asset_id": "AS01",
+      "stride_category": "Tampering",
+      "threat_description": "Malicious firmware injection via JTAG debug port",
+      "threat_agent": "Skilled Attacker (technician or researcher with debugger)",
+      "rationale": "JTAG port provides unrestricted memory write access if not disabled. Attacker writes malicious code to overwrite firmware, bypassing secure boot."
+    },
+    {
+      "id": "TS02",
+      "asset_id": "AS02",
+      "stride_category": "Tampering",
+      "threat_description": "Calibration parameter tampering via diagnostic write commands",
+      "threat_agent": "Skilled Attacker (custom diagnostic tool or modified scan tool)",
+      "rationale": "If diagnostic routine control allows parameter write without authentication, attacker modifies gain or threshold values, causing erratic ESC behavior."
+    },
+    {
+      "id": "TS03",
+      "asset_id": "AS05",
+      "stride_category": "Spoofing",
+      "threat_description": "CAN message spoofing (forged wheel speed signal)",
+      "threat_agent": "Casual Hacker (CAN interceptor + custom script)",
+      "rationale": "Unauthenticated CAN messages on HS-CAN; attacker injects fake speed signals, causing false traction control activation."
+    },
+    {
+      "id": "TS04",
+      "asset_id": "AS05",
+      "stride_category": "Denial of Service",
+      "threat_description": "CAN bus flooding attack (DoS via message injection)",
+      "threat_agent": "Casual Hacker (CAN adapter + script, e.g., ELM327)",
+      "rationale": "Attacker floods CAN bus, overwhelming ECU mailbox capacity. ESC fails to receive valid sensor inputs, triggering watchdog or safe state."
+    },
+    {
+      "id": "TS05",
+      "asset_id": "AS06",
+      "stride_category": "Information Disclosure",
+      "threat_description": "Firmware reverse-engineering via JTAG memory dump",
+      "threat_agent": "Skilled Attacker (security researcher with lab equipment)",
+      "rationale": "If JTAG not disabled, attacker dumps entire firmware to extract proprietary algorithm, calibration, and potential vulnerabilities."
+    },
+    {
+      "id": "TS06",
+      "asset_id": "AS07",
+      "stride_category": "Information Disclosure",
+      "threat_description": "OTA signing key extraction from secure enclave",
+      "threat_agent": "Organized Crime (well-funded red team with hardware reverse-engineering capability)",
+      "rationale": "Compromised signing key enables attacker to forge firmware updates. Requires side-channel attack on secure enclave or supply-chain intercept."
+    },
+    {
+      "id": "TS07",
+      "asset_id": "AS04",
+      "stride_category": "Spoofing",
+      "threat_description": "Diagnostic access bypass (fake authentication)",
+      "threat_agent": "Skilled Attacker (modified scan tool or reverse-engineered protocol)",
+      "rationale": "Weak or default diagnostic credentials allow unauthorized access to DTC clear, parameter writes, and routine control functions."
+    },
+    {
+      "id": "TS08",
+      "asset_id": "AS08",
+      "stride_category": "Repudiation",
+      "threat_description": "DTC deletion to mask tampering evidence",
+      "threat_agent": "Insider (technician) or Skilled Attacker (diagnostic access)",
+      "rationale": "Attacker clears DTCs after causing malfunction, preventing detection of tampering and enabling fraud (odometer rollback, emissions violation)."
+    },
+    {
+      "id": "TS09",
+      "asset_id": "AS01",
+      "stride_category": "Tampering",
+      "threat_description": "Firmware downgrade to vulnerable version",
+      "threat_agent": "Skilled Attacker (access to older firmware image + secure boot bypass)",
+      "rationale": "Attacker downgrades to version with known CVE to exploit vulnerability. Requires either broken secure boot or signing key compromise."
+    },
+    {
+      "id": "TS10",
+      "asset_id": "AS03",
+      "stride_category": "Elevation of Privilege",
+      "threat_description": "Secure boot bypass via fault injection",
+      "threat_agent": "Organized Crime (fault injection lab + specialized equipment)",
+      "rationale": "Attacker uses clock glitch or voltage fault to bypass secure boot signature check, enabling malicious firmware."
+    },
+    {
+      "id": "TS11",
+      "asset_id": "AS05",
+      "stride_category": "Tampering",
+      "threat_description": "Replay attack on authenticated CAN messages",
+      "threat_agent": "Skilled Attacker (CAN sniffer + replay tool)",
+      "rationale": "If CAN messages have HMAC but no timestamp/sequence, attacker replays old speed signal or brake command, causing transient control glitch."
+    },
+    {
+      "id": "TS12",
+      "asset_id": "AS01",
+      "stride_category": "Denial of Service",
+      "threat_description": "Firmware corruption causing CPU trap or infinite loop",
+      "threat_agent": "Skilled Attacker (glitch injection, bit-flip attack, or code injection)",
+      "rationale": "Attacker corrupts firmware or injects malicious code that triggers CPU exception or soft loop, preventing ESC from functioning."
+    },
+    {
+      "id": "TS13",
+      "asset_id": "AS04",
+      "stride_category": "Information Disclosure",
+      "threat_description": "Diagnostic log extraction exposing vehicle history",
+      "threat_agent": "Casual Hacker (standard diagnostic tool)",
+      "rationale": "Unencrypted diagnostic logs may contain GPS traces, speed profiles, or vehicle location information accessible via OBD-II."
+    },
+    {
+      "id": "TS14",
+      "asset_id": "AS09",
+      "stride_category": "Information Disclosure",
+      "threat_description": "Immobilizer secret extraction enabling vehicle cloning",
+      "threat_agent": "Organized Crime (supply-chain intercept or side-channel attack)",
+      "rationale": "If immobilizer secret stored unencrypted or poorly protected, attacker extracts it and clones key fob, enabling vehicle theft."
+    },
+    {
+      "id": "TS15",
+      "asset_id": "AS02",
+      "stride_category": "Tampering",
+      "threat_description": "Calibration integrity attack (tuning box style)",
+      "threat_agent": "Skilled Attacker (custom tuning tool)",
+      "rationale": "Attacker replaces calibration with aftermarket performance tune, disabling emissions controls and safety limiters."
+    }
+  ],
+  "impact_ratings": [
+    {
+      "scenario_id": "TS01",
+      "safety": "Severe",
+      "financial": "Severe",
+      "operational": "Severe",
+      "privacy": "Negligible",
+      "worst_impact": "Severe",
+      "rationale": "Arbitrary firmware enables complete control loss; uncontrolled acceleration, brake disable, steering reverse. AIS 3-6 fatal injury highly probable at highway speed."
+    },
+    {
+      "scenario_id": "TS02",
+      "safety": "Major",
+      "financial": "Major",
+      "operational": "Major",
+      "privacy": "Negligible",
+      "worst_impact": "Major",
+      "rationale": "Calibration tampering causes erratic traction control; AIS 1-2 light injury credible at highway speed or during emergency maneuver."
+    },
+    {
+      "scenario_id": "TS03",
+      "safety": "Major",
+      "financial": "Moderate",
+      "operational": "Moderate",
+      "privacy": "Negligible",
+      "worst_impact": "Major",
+      "rationale": "False speed signal causes ABS chatter, false traction activation; injury during emergency braking credible but not certain."
+    },
+    {
+      "scenario_id": "TS04",
+      "safety": "Severe",
+      "financial": "Major",
+      "operational": "Major",
+      "privacy": "Negligible",
+      "worst_impact": "Severe",
+      "rationale": "CAN flood disables ESC function; loss of stability control at highway speed, loss of control credible."
+    },
+    {
+      "scenario_id": "TS05",
+      "safety": "Negligible",
+      "financial": "Major",
+      "operational": "Moderate",
+      "privacy": "Major",
+      "worst_impact": "Major",
+      "rationale": "Firmware leak exposes proprietary algorithm and calibration; intellectual property theft enables aftermarket tuning and competitor advantage. Privacy: calibration privacy."
+    },
+    {
+      "scenario_id": "TS06",
+      "safety": "Severe",
+      "financial": "Severe",
+      "operational": "Severe",
+      "privacy": "Moderate",
+      "worst_impact": "Severe",
+      "rationale": "OTA key compromise enables fleet-wide malicious firmware deployment. Mass outbreak scenario; AIS 3-6 fatal injury for all affected vehicles."
+    },
+    {
+      "scenario_id": "TS07",
+      "safety": "Major",
+      "financial": "Moderate",
+      "operational": "Moderate",
+      "privacy": "Negligible",
+      "worst_impact": "Major",
+      "rationale": "Unauthorized diagnostic access enables parameter tampering and DTC clearing; major impact same as TS02."
+    },
+    {
+      "scenario_id": "TS08",
+      "safety": "Moderate",
+      "financial": "Major",
+      "operational": "Moderate",
+      "privacy": "Negligible",
+      "worst_impact": "Major",
+      "rationale": "DTC deletion masks tampering; fraud (odometer rollback, emissions evasion); financial and reputational harm."
+    },
+    {
+      "scenario_id": "TS09",
+      "safety": "Severe",
+      "financial": "Severe",
+      "operational": "Major",
+      "privacy": "Negligible",
+      "worst_impact": "Severe",
+      "rationale": "Vulnerable firmware exploitation enables arbitrary code execution; same impact as TS01."
+    },
+    {
+      "scenario_id": "TS10",
+      "safety": "Severe",
+      "financial": "Severe",
+      "operational": "Major",
+      "privacy": "Negligible",
+      "worst_impact": "Severe",
+      "rationale": "Fault injection bypass enables malicious firmware; same impact as TS01."
+    },
+    {
+      "scenario_id": "TS11",
+      "safety": "Moderate",
+      "financial": "Moderate",
+      "operational": "Moderate",
+      "privacy": "Negligible",
+      "worst_impact": "Moderate",
+      "rationale": "Replayed CAN message causes brief traction control glitch; transient stability loss, injury unlikely but possible in emergency scenario."
+    },
+    {
+      "scenario_id": "TS12",
+      "safety": "Severe",
+      "financial": "Major",
+      "operational": "Major",
+      "privacy": "Negligible",
+      "worst_impact": "Severe",
+      "rationale": "Firmware corruption causes ESC disable via watchdog or crash; loss of stability control at highway speed."
+    },
+    {
+      "scenario_id": "TS13",
+      "safety": "Negligible",
+      "financial": "Negligible",
+      "operational": "Negligible",
+      "privacy": "Moderate",
+      "worst_impact": "Moderate",
+      "rationale": "Diagnostic log extraction exposes location history and travel patterns; privacy concern but no safety or major financial impact."
+    },
+    {
+      "scenario_id": "TS14",
+      "safety": "Negligible",
+      "financial": "Major",
+      "operational": "Major",
+      "privacy": "Negligible",
+      "worst_impact": "Major",
+      "rationale": "Vehicle theft risk; significant financial loss (vehicle value), operational impact (supply chain disruption, recall)."
+    },
+    {
+      "scenario_id": "TS15",
+      "safety": "Major",
+      "financial": "Moderate",
+      "operational": "Moderate",
+      "privacy": "Negligible",
+      "worst_impact": "Major",
+      "rationale": "Aftermarket tuning disables emissions controls and safety limiters; same as TS02 (erratic control, safety-critical parameter tampering)."
+    }
+  ],
+  "attack_path_analysis": [
+    {
+      "scenario_id": "TS01",
+      "entry_point": "JTAG debug port (service access)",
+      "attack_vector": "Local, physical + debugger hardware",
+      "preconditions": "JTAG not fused/disabled in production; attacker has specialized debugger ($1K-$5K)",
+      "propagation": "(1) Connect debugger to JTAG TAP (2) Halt CPU (3) Erase flash memory (4) Write malicious firmware (5) Resume execution",
+      "exit_point": "Malicious firmware boots, runs attacker code with full ESC authority"
+    },
+    {
+      "scenario_id": "TS02",
+      "entry_point": "OBD-II diagnostic port (service access)",
+      "attack_vector": "Local, via standard diagnostic tool or modified scan tool",
+      "preconditions": "Diagnostic write-access not properly authenticated; attacker reverse-engineers protocol or uses leaked credentials",
+      "propagation": "(1) Connect scan tool via OBD-II (2) Unlock diagnostic session (3) Access routine control / DID write (4) Write calibration values (5) Confirm write successful",
+      "exit_point": "Calibration data altered; next ECU reboot applies new parameters"
+    },
+    {
+      "scenario_id": "TS03",
+      "entry_point": "CAN-HS bus (vehicle network, always accessible)",
+      "attack_vector": "Local, via OBD-II adapter or direct CAN intercept (OBD-II port, CAN connector, or through another ECU)",
+      "preconditions": "Attacker has CAN adapter ($50-$500) and reverse-engineered or publicly known CAN message format (wheel speed ID)",
+      "propagation": "(1) Identify wheel speed CAN message ID (public in ISO standards) (2) Craft forged CAN message with fake speed value (3) Inject onto CAN bus with spoofed source node ID",
+      "exit_point": "ESC ECU receives forged speed; applies false traction control"
+    },
+    {
+      "scenario_id": "TS04",
+      "entry_point": "CAN-HS bus",
+      "attack_vector": "Local, via OBD-II or direct CAN tap",
+      "preconditions": "Attacker has CAN adapter; no rate limiting on ESC message handler",
+      "propagation": "(1) Craft CAN messages targeting ESC mailbox IDs (2) Flood CAN bus at high frequency (1000+ msg/sec) (3) Overwhelm ESC's message queue (4) ECU watchdog timeout or message handler exception",
+      "exit_point": "ESC stops responding; watchdog resets ESC into safe state or fault mode"
+    },
+    {
+      "scenario_id": "TS05",
+      "entry_point": "JTAG debug port",
+      "attack_vector": "Local, physical + debugger hardware",
+      "preconditions": "JTAG not disabled; attacker has debugger and reverse-engineering tools (IDA Pro, Ghidra, etc.)",
+      "propagation": "(1) Connect debugger (2) Halt CPU (3) Read entire flash memory (0x8000000-0x8085FFF) (4) Save dump to file (5) Offline reverse-engineering with disassembly tools",
+      "exit_point": "Attacker obtains proprietary firmware; can analyze for vulnerabilities or extract calibration"
+    },
+    {
+      "scenario_id": "TS06",
+      "entry_point": "Secure enclave (if HSM used) or OTA infrastructure backend",
+      "attack_vector": "Supply-chain intercept, side-channel attack, or compromised infrastructure",
+      "preconditions": "Attacker has access to secure enclave hardware or OTA server; significant expertise in cryptanalysis or side-channel attacks",
+      "propagation": "(1) Extract signing key via side-channel (power analysis, timing, EM) OR (2) Compromise OTA server; extract private key from database (3) Use key to sign arbitrary firmware image",
+      "exit_point": "Attacker can forge valid firmware updates; can push to fleet"
+    },
+    {
+      "scenario_id": "TS07",
+      "entry_point": "OBD-II diagnostic port",
+      "attack_vector": "Local, via standard or modified scan tool",
+      "preconditions": "Weak diagnostic credentials (default password, hardcoded, or simple); attacker reverse-engineers protocol or accesses leaked credentials",
+      "propagation": "(1) Connect scan tool (2) Request diagnostic session (3) Provide fake credentials (default or brute-force) (4) Unlock parameter write (5) Write calibration or routine control",
+      "exit_point": "Full diagnostic access granted; attacker can tamper, clear DTC, etc."
+    },
+    {
+      "scenario_id": "TS08",
+      "entry_point": "OBD-II diagnostic port",
+      "attack_vector": "Local, via diagnostic tool with elevated access",
+      "preconditions": "Attacker has write access to DTC storage (via diagnostic routine control or direct memory write)",
+      "propagation": "(1) Authenticate to diagnostic session (2) Clear DTC memory via routine control (Clear Diagnostic Information, service 0x14) (3) Confirm DTC deletion",
+      "exit_point": "Diagnostic history erased; tampering no longer visible to technician"
+    },
+    {
+      "scenario_id": "TS09",
+      "entry_point": "Serial bootloader or JTAG debug port",
+      "attack_vector": "Local, physical",
+      "preconditions": "Attacker has access to bootloader protocol (reverse-engineered or leaked); vulnerable firmware version obtained from web or supply chain",
+      "propagation": "(1) Reset ESC to bootloader mode (2) Authenticate to bootloader (if required) (3) Upload old vulnerable firmware image (4) Bootloader erases flash and writes new image",
+      "exit_point": "Vulnerable firmware running; attacker can now exploit known CVE"
+    },
+    {
+      "scenario_id": "TS10",
+      "entry_point": "JTAG debug port",
+      "attack_vector": "Local, physical + specialized equipment (glitch injection, power transient, clock fault)",
+      "preconditions": "Attacker has fault injection lab ($10K-$100K); expertise in hardware side-channel attacks; reverse-engineered secure boot logic",
+      "propagation": "(1) Connect fault injection equipment (2) Perform side-channel profiling to identify secure boot check (3) Inject clock glitch or voltage transient at critical moment (4) Skip signature verification check (5) Load and execute arbitrary firmware",
+      "exit_point": "Secure boot bypassed; malicious firmware executes"
+    },
+    {
+      "scenario_id": "TS11",
+      "entry_point": "CAN-HS bus",
+      "attack_vector": "Local, CAN sniffer + replay tool",
+      "preconditions": "Attacker captures legitimate CAN message (e.g., speed signal with HMAC) during normal driving; HMAC present but timestamp/sequence counter missing",
+      "propagation": "(1) Sniff CAN message (wheel speed with HMAC) (2) Record timestamp and full payload (3) Later, inject identical message (replay) (4) ESC validates HMAC (passes) but doesn't check timestamp",
+      "exit_point": "Replayed message accepted as fresh; stale speed signal applied"
+    },
+    {
+      "scenario_id": "TS12",
+      "entry_point": "JTAG, bootloader, or glitch injection",
+      "attack_vector": "Local, physical",
+      "preconditions": "Attacker can write to flash or inject fault; malicious code targets firmware or exploits fault to flip bits",
+      "propagation": "(1) Inject malicious code or bit-flip via fault injection (2) Code contains infinite loop or exception-raising instruction (3) CPU enters loop or exception handler, preventing normal execution (4) Watchdog detects hang and resets",
+      "exit_point": "ESC firmware corrupted or halted; watchdog forces safe state"
+    },
+    {
+      "scenario_id": "TS13",
+      "entry_point": "OBD-II diagnostic port",
+      "attack_vector": "Local, standard diagnostic tool or custom reader",
+      "preconditions": "Diagnostic logging enabled; logs stored unencrypted in NVM; diagnostic access not restricted",
+      "propagation": "(1) Connect scan tool (2) Request data streaming (service 0x22) or extended diagnostics (3) Read diagnostic records containing GPS traces, speed history (4) Extract to file",
+      "exit_point": "Location history and driving patterns disclosed"
+    },
+    {
+      "scenario_id": "TS14",
+      "entry_point": "Secure enclave (OTP or HSM) or supply-chain intercept",
+      "attack_vector": "Hardware side-channel attack, supply-chain intercept, or code injection",
+      "preconditions": "Attacker has access to chip or side-channel lab ($50K+); immobilizer secret not protected with tamper detection",
+      "propagation": "(1) Extract secret via side-channel (power, timing, EM) OR (2) Intercept secret during supply-chain transport (3) Clone immobilizer key using extracted secret (4) Vehicle accepts cloned key as legitimate",
+      "exit_point": "Attacker has valid key; can unlock vehicle"
+    },
+    {
+      "scenario_id": "TS15",
+      "entry_point": "OBD-II diagnostic port or bootloader",
+      "attack_vector": "Local, custom tuning tool or diagnostic access",
+      "preconditions": "Attacker has access to calibration write via diagnostic or bootloader; no authentication on tuning routine",
+      "propagation": "(1) Connect tuning tool via OBD-II (2) Identify calibration sectors for fuel, boost, RPM limits (3) Overwrite with aftermarket values (disable EGR, raise boost, remove speed limiter) (4) Save and reboot",
+      "exit_point": "Vehicle now running modified calibration; emissions controls disabled"
+    }
+  ],
+  "feasibility_ratings": [
+    {
+      "scenario_id": "TS01",
+      "elapsed_time": "Weeks",
+      "expertise": "Proficient",
+      "knowledge": "Restricted",
+      "opportunity": "Moderate",
+      "equipment": "Specialized",
+      "overall_feasibility": "Low",
+      "rationale": "Requires JTAG debugger and reverse-engineering; not trivial but achievable for skilled attacker with time and tools. Opportunity limited to service access."
+    },
+    {
+      "scenario_id": "TS02",
+      "elapsed_time": "Weeks",
+      "expertise": "Proficient",
+      "knowledge": "Restricted",
+      "opportunity": "Easy",
+      "equipment": "Standard",
+      "overall_feasibility": "Medium",
+      "rationale": "OBD-II always accessible; diagnostic protocol requires reverse-engineering but well-documented for mainstream ECUs. Standard tools (Python + CAN adapter) sufficient."
+    },
+    {
+      "scenario_id": "TS03",
+      "elapsed_time": "Days",
+      "expertise": "Layman",
+      "knowledge": "Public",
+      "opportunity": "Unlimited",
+      "equipment": "Standard",
+      "overall_feasibility": "High",
+      "rationale": "CAN message format public in ISO standards; message injection trivial with $50 CAN adapter and Python script. Opportunity unlimited (OBD-II always accessible)."
+    },
+    {
+      "scenario_id": "TS04",
+      "elapsed_time": "Days",
+      "expertise": "Layman",
+      "knowledge": "Public",
+      "opportunity": "Unlimited",
+      "equipment": "Standard",
+      "overall_feasibility": "High",
+      "rationale": "CAN bus flooding requires only CAN adapter and message generator; PoCs publicly available. No authentication required."
+    },
+    {
+      "scenario_id": "TS05",
+      "elapsed_time": "Weeks",
+      "expertise": "Expert",
+      "knowledge": "Restricted",
+      "opportunity": "Moderate",
+      "equipment": "Specialized",
+      "overall_feasibility": "Low",
+      "rationale": "JTAG access + reverse-engineering expertise (IDA Pro, Ghidra) required. Time: weeks for firmware analysis. Opportunity: service access only."
+    },
+    {
+      "scenario_id": "TS06",
+      "elapsed_time": "Months",
+      "expertise": "Expert",
+      "knowledge": "Critical",
+      "opportunity": "Difficult",
+      "equipment": "Bespoke",
+      "overall_feasibility": "Very Low",
+      "rationale": "Secure enclave extractio requires side-channel lab ($100K+) and cryptanalysis expertise. Alternatively, supply-chain intercept (nation-state level). Extremely difficult."
+    },
+    {
+      "scenario_id": "TS07",
+      "elapsed_time": "Days",
+      "expertise": "Proficient",
+      "knowledge": "Restricted",
+      "opportunity": "Easy",
+      "equipment": "Standard",
+      "overall_feasibility": "Medium",
+      "rationale": "Diagnostic protocol reverse-engineering required, but standard tools available. Default credentials or brute-force may succeed quickly."
+    },
+    {
+      "scenario_id": "TS08",
+      "elapsed_time": "Days",
+      "expertise": "Proficient",
+      "knowledge": "Public",
+      "opportunity": "Easy",
+      "equipment": "Standard",
+      "overall_feasibility": "Medium",
+      "rationale": "DTC clear routine (ISO 14229 service 0x14) public; diagnostic access required but achievable via TS07. Standard scan tool."
+    },
+    {
+      "scenario_id": "TS09",
+      "elapsed_time": "Weeks",
+      "expertise": "Proficient",
+      "knowledge": "Public",
+      "opportunity": "Difficult",
+      "equipment": "Specialized",
+      "overall_feasibility": "Low",
+      "rationale": "Requires old firmware image (may be available from web) + bootloader access. Firmware upload requires reverse-engineered bootloader protocol or physical access."
+    },
+    {
+      "scenario_id": "TS10",
+      "elapsed_time": "Months",
+      "expertise": "Expert",
+      "knowledge": "Critical",
+      "opportunity": "Difficult",
+      "equipment": "Bespoke",
+      "overall_feasibility": "Very Low",
+      "rationale": "Fault injection lab and secure boot reverse-engineering required. Years of research in hardware side-channels. Nation-state or elite red-team capability."
+    },
+    {
+      "scenario_id": "TS11",
+      "elapsed_time": "Weeks",
+      "expertise": "Proficient",
+      "knowledge": "Public",
+      "opportunity": "Easy",
+      "equipment": "Standard",
+      "overall_feasibility": "Medium",
+      "rationale": "CAN sniffer and replay tool easy to build; HMAC validation passes on replayed message if no timestamp check. Low barrier to entry."
+    },
+    {
+      "scenario_id": "TS12",
+      "elapsed_time": "Weeks",
+      "expertise": "Expert",
+      "knowledge": "Restricted",
+      "opportunity": "Moderate",
+      "equipment": "Specialized",
+      "overall_feasibility": "Low",
+      "rationale": "Fault injection expertise required OR firmware vulnerability exploitation (requires reverse-engineering). Opportunity: JTAG or glitch injection lab access."
+    },
+    {
+      "scenario_id": "TS13",
+      "elapsed_time": "Days",
+      "expertise": "Layman",
+      "knowledge": "Public",
+      "opportunity": "Unlimited",
+      "equipment": "Standard",
+      "overall_feasibility": "High",
+      "rationale": "Standard diagnostic tools retrieve logs without encryption. No authentication barrier if logs readable. Data exfiltration trivial."
+    },
+    {
+      "scenario_id": "TS14",
+      "elapsed_time": "Months",
+      "expertise": "Expert",
+      "knowledge": "Critical",
+      "opportunity": "Difficult",
+      "equipment": "Bespoke",
+      "overall_feasibility": "Very Low",
+      "rationale": "Immobilizer secret extraction via side-channel lab OR supply-chain intercept. Requires nation-state or elite organized crime. Extremely high barrier."
+    },
+    {
+      "scenario_id": "TS15",
+      "elapsed_time": "Weeks",
+      "expertise": "Proficient",
+      "knowledge": "Restricted",
+      "opportunity": "Easy",
+      "equipment": "Standard",
+      "overall_feasibility": "Medium",
+      "rationale": "Tuning tool protocol reverse-engineering required, but aftermarket tuning is commercial industry. Tools available; OBD-II access easy."
+    }
+  ],
+  "risk_overrides": [],
+  "treatment_decisions": [
+    {
+      "scenario_id": "TS01",
+      "treatment_type": "Avoid",
+      "rationale": "Disable JTAG fuse in production ECU; set JTAG_DIS register. Implement secure boot with signature verification.",
+      "residual_acceptable": true,
+      "owner": "HW Design Lead",
+      "target_date": "2026-06-15"
+    },
+    {
+      "scenario_id": "TS02",
+      "treatment_type": "Reduce",
+      "rationale": "Implement authentication for diagnostic parameter writes (HMAC-based or cryptographic); rate-limit parameter changes.",
+      "residual_acceptable": true,
+      "owner": "Firmware Lead",
+      "target_date": "2026-07-01"
+    },
+    {
+      "scenario_id": "TS03",
+      "treatment_type": "Reduce",
+      "rationale": "Add HMAC authentication to critical CAN messages (wheel speed, yaw rate). Implement plausibility checks (reject physically impossible speed changes).",
+      "residual_acceptable": true,
+      "owner": "CAN Protocol Lead",
+      "target_date": "2026-07-15"
+    },
+    {
+      "scenario_id": "TS04",
+      "treatment_type": "Reduce",
+      "rationale": "Implement rate limiting on CAN message processing; prioritize critical messages; add watchdog monitoring for message handler. Implement safe-state fallback on watchdog.",
+      "residual_acceptable": true,
+      "owner": "Firmware Lead",
+      "target_date": "2026-08-01"
+    },
+    {
+      "scenario_id": "TS05",
+      "treatment_type": "Reduce",
+      "rationale": "Disable JTAG in production (Avoid). Implement code obfuscation and anti-tampering checks. Protect proprietary calibration via encryption.",
+      "residual_acceptable": true,
+      "owner": "HW Design Lead",
+      "target_date": "2026-06-15"
+    },
+    {
+      "scenario_id": "TS06",
+      "treatment_type": "Reduce",
+      "rationale": "Store OTA signing key in certified HSM (Hardware Security Module) with side-channel resistance. Implement secure provisioning and key rotation.",
+      "residual_acceptable": true,
+      "owner": "Security Lead",
+      "target_date": "2026-09-01"
+    },
+    {
+      "scenario_id": "TS07",
+      "treatment_type": "Reduce",
+      "rationale": "Implement strong diagnostic authentication (challenge-response, certificate-based). Use unique credentials per vehicle or OTA-provisioned keys.",
+      "residual_acceptable": true,
+      "owner": "Firmware Lead",
+      "target_date": "2026-07-15"
+    },
+    {
+      "scenario_id": "TS08",
+      "treatment_type": "Reduce",
+      "rationale": "Implement tamper-evident DTC logging (cryptographic signature on DTC entries). Add audit trail with timestamps and authentication. DTC clear requires elevated access.",
+      "residual_acceptable": true,
+      "owner": "Firmware Lead",
+      "target_date": "2026-08-15"
+    },
+    {
+      "scenario_id": "TS09",
+      "treatment_type": "Avoid",
+      "rationale": "Implement secure boot with versioning check; reject firmware older than current version. Ensure all old firmware versions patched or removed from circulation.",
+      "residual_acceptable": true,
+      "owner": "HW Design Lead",
+      "target_date": "2026-06-15"
+    },
+    {
+      "scenario_id": "TS10",
+      "treatment_type": "Reduce",
+      "rationale": "Implement fault-tolerant secure boot (multiple checks, redundancy). Use side-channel resistant cryptographic libraries. Add sensor for glitch injection detection.",
+      "residual_acceptable": true,
+      "owner": "Security Lead",
+      "target_date": "2026-10-01"
+    },
+    {
+      "scenario_id": "TS11",
+      "treatment_type": "Reduce",
+      "rationale": "Add timestamp or sequence counter to authenticated CAN messages. Implement time-window validation (reject messages with stale timestamp).",
+      "residual_acceptable": true,
+      "owner": "CAN Protocol Lead",
+      "target_date": "2026-08-01"
+    },
+    {
+      "scenario_id": "TS12",
+      "treatment_type": "Reduce",
+      "rationale": "Implement firmware integrity checks (CRC/signature verification on boot). Use redundant watchdog monitors and secure reset. Add firmware corruption detection.",
+      "residual_acceptable": true,
+      "owner": "Firmware Lead",
+      "target_date": "2026-07-15"
+    },
+    {
+      "scenario_id": "TS13",
+      "treatment_type": "Reduce",
+      "rationale": "Encrypt diagnostic logs at rest. Limit diagnostic log retention time. Implement access control on log read (restrict to authorized tools only).",
+      "residual_acceptable": true,
+      "owner": "Firmware Lead",
+      "target_date": "2026-08-01"
+    },
+    {
+      "scenario_id": "TS14",
+      "treatment_type": "Reduce",
+      "rationale": "Store immobilizer secret in secure enclave (e.g., ARM TrustZone) with side-channel hardening. Implement tamper detection (physical + logical).",
+      "residual_acceptable": true,
+      "owner": "Security Lead",
+      "target_date": "2026-09-15"
+    },
+    {
+      "scenario_id": "TS15",
+      "treatment_type": "Reduce",
+      "rationale": "Implement calibration integrity verification (signature check on boot). Authenticate calibration writes via diagnostic. Log all calibration changes with timestamp.",
+      "residual_acceptable": true,
+      "owner": "Firmware Lead",
+      "target_date": "2026-07-15"
+    }
+  ]
+}

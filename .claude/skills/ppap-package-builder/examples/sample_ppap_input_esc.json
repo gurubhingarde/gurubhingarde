@@ -1,0 +1,188 @@
+{
+  "submission": {
+    "customer": "Phoenix Motors",
+    "supplier": "TechElectronics Inc.",
+    "part_name": "Electronic Stability Control (ESC) Microcontroller Module",
+    "part_number": "ESC-MCU-2026-A",
+    "model_year": "2027",
+    "supplier_code": "TE-0847",
+    "level": 3,
+    "ppap_date": "2026-04-29",
+    "psw_signoff_name": "Dr. Robert Chen",
+    "psw_signoff_title": "Quality Assurance Manager",
+    "psw_signoff_email": "robert.chen@techelectronics.com"
+  },
+  "linked_artifacts": {
+    "design_records": "path/to/design_dfmea.xlsx",
+    "dfmea": "path/to/design_fmea.xlsx",
+    "pfmea": "path/to/process_fmea.xlsx",
+    "control_plan": "path/to/control_plan.xlsx",
+    "msa_results": "path/to/msa_results.xlsx",
+    "imds_submission_id": "IMDS-2026-0847-001"
+  },
+  "engineering_changes": [
+    {
+      "ecn_id": "ECN-2026-0001",
+      "date": "2026-02-15",
+      "description": "PCB layout optimization for improved thermal management; updated footprint for BGA package",
+      "drawings_affected": "DWG-ESC-2026-001, DWG-ESC-2026-002",
+      "customer_notified": "Yes",
+      "impl_date": "2026-03-01"
+    },
+    {
+      "ecn_id": "ECN-2026-0002",
+      "date": "2026-03-10",
+      "description": "Component source change: Capacitor supplier A to supplier B (same spec, same footprint)",
+      "drawings_affected": "DWG-ESC-2026-001",
+      "customer_notified": "Yes",
+      "impl_date": "2026-03-20"
+    }
+  ],
+  "dimensional_results": [
+    {
+      "char_id": "D-01",
+      "spec": "PCB Length",
+      "tolerance": "100.0 ± 0.5 mm",
+      "measured": "100.02 mm",
+      "in_spec": "Yes",
+      "sample": "50"
+    },
+    {
+      "char_id": "D-02",
+      "spec": "PCB Width",
+      "tolerance": "60.0 ± 0.5 mm",
+      "measured": "60.01 mm",
+      "in_spec": "Yes",
+      "sample": "50"
+    },
+    {
+      "char_id": "D-03",
+      "spec": "Component Height (BGA)",
+      "tolerance": "2.5 ± 0.2 mm",
+      "measured": "2.48 mm",
+      "in_spec": "Yes",
+      "sample": "50"
+    },
+    {
+      "char_id": "D-04",
+      "spec": "Connector Pin Height",
+      "tolerance": "5.0 ± 0.3 mm",
+      "measured": "5.01 mm",
+      "in_spec": "Yes",
+      "sample": "50"
+    },
+    {
+      "char_id": "D-05",
+      "spec": "Edge to Hole Distance",
+      "tolerance": "2.0 ± 0.2 mm",
+      "measured": "1.99 mm",
+      "in_spec": "Yes",
+      "sample": "50"
+    },
+    {
+      "char_id": "D-06",
+      "spec": "Solder Joint Fillet Height",
+      "tolerance": "0.5 to 1.5 mm",
+      "measured": "1.02 mm",
+      "in_spec": "Yes",
+      "sample": "50"
+    },
+    {
+      "char_id": "D-07",
+      "spec": "BGA Solder Ball Diameter",
+      "tolerance": "0.75 ± 0.15 mm",
+      "measured": "0.76 mm",
+      "in_spec": "Yes",
+      "sample": "50"
+    },
+    {
+      "char_id": "D-08",
+      "spec": "Component Placement Accuracy (X-Y)",
+      "tolerance": "±0.5 mm",
+      "measured": "±0.23 mm",
+      "in_spec": "Yes",
+      "sample": "50"
+    }
+  ],
+  "process_capability": [
+    {
+      "char_id": "PCB Placement Accuracy (X-Y)",
+      "cpk": 1.85,
+      "ppk": 1.92,
+      "sample_size": 125,
+      "sample_period": "5 production days (2026-03-15 to 2026-03-20)"
+    },
+    {
+      "char_id": "Solder Joint Count (interconnects)",
+      "cpk": 2.10,
+      "ppk": 2.15,
+      "sample_size": 125,
+      "sample_period": "5 production days (100% solder joint count check via X-ray)"
+    },
+    {
+      "char_id": "ICT (In-Circuit Test) Pass Rate",
+      "cpk": 1.95,
+      "ppk": 2.05,
+      "sample_size": 100,
+      "sample_period": "3 production days (100% functional test)"
+    },
+    {
+      "char_id": "PCB Thickness (critical for connector contact)",
+      "cpk": 1.72,
+      "ppk": 1.80,
+      "sample_size": 50,
+      "sample_period": "1 week continuous monitoring"
+    },
+    {
+      "char_id": "Reflow Oven Temperature Profile Compliance",
+      "cpk": 2.30,
+      "ppk": 2.35,
+      "sample_size": 200,
+      "sample_period": "5 production days (continuous monitoring via thermocouple data)"
+    }
+  ],
+  "customer_specific_requirements": [
+    {
+      "id": "PHX-REQ-001",
+      "requirement": "Submit International Material Data System (IMDS) submission within 30 days of PPAP approval",
+      "evidence": "IMDS-2026-0847-001 submission pending; due by 2026-05-29",
+      "status": "In Progress",
+      "due": "2026-05-29"
+    },
+    {
+      "id": "PHX-REQ-002",
+      "requirement": "RoHS Certificate (EU 2011/65/EU) from third-party lab (A2LA or ISO 17025 accredited)",
+      "evidence": "RoHS Cert 2026-001 from TÜV SÜD (A2LA accredited), all materials compliant; lead-free solder verified",
+      "status": "Complete",
+      "due": "2026-04-30"
+    },
+    {
+      "id": "PHX-REQ-003",
+      "requirement": "Thermal cycling test (IEC 60068-2-14, -10C to +85C, 500 cycles) with no functional failure",
+      "evidence": "Test report TR-THERMAL-001 from TÜV SÜD; all samples pass electrical test post-thermal cycling",
+      "status": "Complete",
+      "due": "2026-04-30"
+    },
+    {
+      "id": "PHX-REQ-004",
+      "requirement": "Vibration endurance test (MIL-STD-810H, 10-500 Hz, 7.5 G, 4 hours per axis) with no failure",
+      "evidence": "Test report TR-VIB-001 from TÜV SÜD; samples post-test confirmed functional",
+      "status": "Complete",
+      "due": "2026-04-30"
+    },
+    {
+      "id": "PHX-REQ-005",
+      "requirement": "Supplier shall maintain process capability Cpk >= 1.67 for all critical characteristics throughout production (minimum 6-month monitoring post-approval)",
+      "evidence": "Initial capability studies submitted; supplier committed to monthly SPC reporting for 6 months post-approval",
+      "status": "Conditional (post-approval monitoring)",
+      "due": "2026-11-29"
+    },
+    {
+      "id": "PHX-REQ-006",
+      "requirement": "On-site supplier audit to be scheduled and completed within 60 days of PPAP approval",
+      "evidence": "Audit scheduled for 2026-05-15 (Phoenix Motors Quality, Design Engineering, Manufacturing attendance)",
+      "status": "Scheduled",
+      "due": "2026-06-29"
+    }
+  ]
+}

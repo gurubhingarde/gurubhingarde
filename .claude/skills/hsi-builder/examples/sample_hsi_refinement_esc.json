@@ -1,0 +1,59 @@
+{
+  "project": {
+    "name": "ESC Electronic Stability Control",
+    "doc_id": "HSI-ESC-001",
+    "revision": "1.0",
+    "date": "2026-04-28",
+    "author": "Integration Engineer",
+    "approver": "Chief Safety Officer"
+  },
+  "linked_tsc": "TSC_ESC_demo.xlsx",
+  "linked_hw_arch": "HW_Architecture_ESC.xlsx",
+  "signal_overrides": [
+    {
+      "signal_name": "esc.diag.wheel_sm10",
+      "bit_width": 1,
+      "data_type": "bit",
+      "register_addr": "0x4001_0010",
+      "register_offset": "bit 0",
+      "access": "RW",
+      "integrity": "Parity",
+      "validity_bit": "esc.diag.wheel_sm10_valid",
+      "max_age_ms": 10,
+      "sample_rate": 100,
+      "latency_hw_to_sw": 5,
+      "encoding_rules": "0=ok, 1=fault",
+      "detection_time_ms": 1
+    },
+    {
+      "signal_name": "esc.diag.processor_sm01",
+      "bit_width": 1,
+      "data_type": "bit",
+      "register_addr": "0x4001_0014",
+      "register_offset": "bit 4",
+      "access": "R",
+      "integrity": "CRC-16",
+      "validity_bit": "esc.diag.processor_sm01_valid",
+      "max_age_ms": 1,
+      "sample_rate": 1000,
+      "latency_hw_to_sw": 0.1,
+      "encoding_rules": "0=lockstep ok, 1=mismatch detected",
+      "detection_time_ms": 0.05
+    },
+    {
+      "signal_name": "esc.live.wheel_sm10_ack",
+      "bit_width": 8,
+      "data_type": "byte",
+      "register_addr": "0x4001_0020",
+      "register_offset": "bits 0-7",
+      "access": "W",
+      "integrity": "None",
+      "validity_bit": "",
+      "max_age_ms": 50,
+      "sample_rate": 20,
+      "latency_sw_to_hw": 10,
+      "encoding_rules": "8-bit rolling counter, increment per 50ms task",
+      "detection_time_ms": 50
+    }
+  ]
+}

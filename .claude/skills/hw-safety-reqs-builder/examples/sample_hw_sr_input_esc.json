@@ -1,0 +1,25 @@
+{
+  "project": {
+    "name": "Electronic Stability Control (ESC) System",
+    "doc_id": "HW-SR-ESC-001",
+    "revision": "0.1",
+    "date": "2026-04-28",
+    "author": "Hardware Team",
+    "approver": "Safety Manager"
+  },
+  "linked_tsc": "<path to TSC xlsx produced by tsc-builder>",
+  "hw_sr_overrides": [
+    {
+      "parent_hw_tsr": "TSR-001-01-01",
+      "hw_sr_text": "The HW shall provide a 12-bit ADC channel for the front-left wheel speed sensor with input range 0-5V and ±5% accuracy over temperature range -40C to +85C.",
+      "allocated_hw_element": "MCU_ADC_CH0",
+      "target_dc_percent": 70
+    },
+    {
+      "parent_hw_tsr": "TSR-001-02-01",
+      "hw_sr_text": "The HW shall implement a digital out-of-range comparator on the sampled wheel speed ADC value with low threshold 0.5V (10 km/h) and high threshold 4.5V (200 km/h), asserting fault flag within 10 ms.",
+      "allocated_hw_element": "MCU_CMP_01",
+      "target_dc_percent": 75
+    }
+  ]
+}

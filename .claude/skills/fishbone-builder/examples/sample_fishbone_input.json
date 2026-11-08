@@ -1,0 +1,114 @@
+{
+  "effect": {
+    "statement": "High defect rate in solder joint quality: 3.2% of boards show cold solder joints on BGAs and fine-pitch connectors after reflow.",
+    "owner": "Manufacturing Engineer",
+    "date": "2026-04-10"
+  },
+  "cause_categories": [
+    {
+      "category_name": "Manpower",
+      "causes": [
+        {
+          "cause": "Reflow oven operator not following temperature ramp procedure; skipping pre-heat dwell time.",
+          "evidence": "Observed operator advancing ramp screen without waiting 30s pre-heat hold. Time study showed average dwell 8s vs. spec 30s.",
+          "impact_level": "High"
+        },
+        {
+          "cause": "Training on new solder paste specification not conducted after supplier change.",
+          "evidence": "Paste lot change from supplier A to B (different flux chemistry); no training provided to assembly team.",
+          "impact_level": "High"
+        },
+        {
+          "cause": "Operator fatigue during 10+ hour shifts; visual inspection (AOI) operator misses some defects.",
+          "evidence": "Peak defects observed in third shift (10pm-6am); AOI reject rate 1.2% vs. final inspection 3.2%.",
+          "impact_level": "Medium"
+        }
+      ]
+    },
+    {
+      "category_name": "Methods",
+      "causes": [
+        {
+          "cause": "Reflow profile temperature ramp rates not validated for new solder paste flux chemistry.",
+          "evidence": "Old profile used 2C/s ramp; new flux (lower Tg) requires 3C/s per datasheet; boards exhibit slower wetting.",
+          "impact_level": "High"
+        },
+        {
+          "cause": "No wet-to-liquid bridge test (WLBT) or flux activity monitoring during process qualification.",
+          "evidence": "Process window study incomplete; no measurement of flux activity or oxide reduction.",
+          "impact_level": "Medium"
+        },
+        {
+          "cause": "Solder paste inspection interval too long (8 hours); paste rheology degradation not detected.",
+          "evidence": "Paste bottles opened >6 hours before reflow; viscosity increases, reducing solder flow.",
+          "impact_level": "Medium"
+        }
+      ]
+    },
+    {
+      "category_name": "Machines",
+      "causes": [
+        {
+          "cause": "Reflow oven thermocouple calibration overdue; temperature reading drift of +8C undetected.",
+          "evidence": "Oven calibration cert shows last check 18 months ago (due every 12 months); recent cal check found +8C error.",
+          "impact_level": "High"
+        },
+        {
+          "cause": "Nitrogen atmosphere purity drifting below 95%; oven N2 generator filter not changed regularly.",
+          "evidence": "Oxygen analyzer showed 6.2% O2 (spec <2%); N2 generator air filter change history shows >500 hours since last service.",
+          "impact_level": "Medium"
+        }
+      ]
+    },
+    {
+      "category_name": "Materials",
+      "causes": [
+        {
+          "cause": "Solder paste supplier changed mid-production; lot-to-lot variation in flux activity and particle size.",
+          "evidence": "Paste lots from supplier B show 8-12% wider particle size distribution vs. supplier A (statistical analysis).",
+          "impact_level": "High"
+        },
+        {
+          "cause": "PCB copper pad surface roughness increased due to new laminate supplier; reduced wetting angle.",
+          "evidence": "New FR-4 laminate batch shows Cu Ra = 1.8 um vs. spec 0.8-1.2 um; contact angle +15 degrees.",
+          "impact_level": "Medium"
+        },
+        {
+          "cause": "Lead-free solder alloy (SAC305) sensitivity to moisture in paste; moisture content >0.5%.",
+          "evidence": "Paste moisture meter (Karl Fischer) reads 0.58% vs. spec <0.4%; paste stored in humid area before use.",
+          "impact_level": "Medium"
+        }
+      ]
+    },
+    {
+      "category_name": "Measurement",
+      "causes": [
+        {
+          "cause": "AOI (automated optical inspection) camera focus drifting; soft-focus images miss fine-pitch solder bridges.",
+          "evidence": "High-magnification verification images show AOI misses ~40% of cold joints; camera lens focus manual and unstable.",
+          "impact_level": "High"
+        },
+        {
+          "cause": "No X-ray inspection for BGA defects; AOI cannot see under BGA ball array.",
+          "evidence": "Final assembly X-ray reveals voids and cold joints in BGA corner positions undetected by AOI.",
+          "impact_level": "Medium"
+        }
+      ]
+    },
+    {
+      "category_name": "Mother Nature",
+      "causes": [
+        {
+          "cause": "Seasonal humidity spike (April-May) increases moisture absorption in solder paste during open-air storage.",
+          "evidence": "Humidity in production area 65-75% RH during spring; paste storage cabinet humidity meter not functioning.",
+          "impact_level": "Medium"
+        },
+        {
+          "cause": "Ambient temperature swings (18-28C) affect reflow oven heat-up time and process window stability.",
+          "evidence": "Morning ramp times longer; afternoon shorter; process window shifts by ~10 seconds peak time.",
+          "impact_level": "Low"
+        }
+      ]
+    }
+  ]
+}

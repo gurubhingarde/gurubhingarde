@@ -1,0 +1,87 @@
+{
+  "problem": {
+    "id": "COM-2026-0147",
+    "customer": "Acme Motors, Inc.",
+    "description": "Intermittent ESC system shutdown on highway driving after 3000 km; customer reported loss of stability control warning and chime.",
+    "date_opened": "2026-04-15",
+    "owner": "John Smith",
+    "due_date": "2026-05-31"
+  },
+  "team": [
+    {"name": "John Smith", "role": "Problem Owner", "expertise": "ESC System Integration", "contact": "j.smith@company.com"},
+    {"name": "Sarah Chen", "role": "Engineering Lead", "expertise": "Control Algorithm", "contact": "s.chen@company.com"},
+    {"name": "Mike Johnson", "role": "Hardware", "expertise": "CAN Bus & Sensor Interface", "contact": "m.johnson@company.com"},
+    {"name": "Lisa Garcia", "role": "Quality", "expertise": "Root Cause & Corrective Action", "contact": "l.garcia@company.com"},
+    {"name": "Tom Wilson", "role": "Manufacturing", "expertise": "Production & Assembly", "contact": "t.wilson@company.com"}
+  ],
+  "is_is_not": {
+    "is": "Intermittent shutdown (signal loss) of ESC control module after 3000-5000 km operation on highway driving.",
+    "is_not": "Physical module failure, connector looseness, or software crash (logs show clean state transition).",
+    "observed_effect": "ESC warning lamp illuminates; chime sounds; steering assist disabled for 2-5 seconds; then recovery to normal operation.",
+    "impact": "Customer safety concern; potential warranty claim; risk of fleet return."
+  },
+  "interim_containment": [
+    {
+      "action": "Implement CAN message watchdog timeout alert in firmware (non-critical warning only)",
+      "owner": "Sarah Chen",
+      "due_date": "2026-04-20",
+      "verification": "Deployed in ECU v1.2.3; field validation on 10 customer vehicles",
+      "status": "Complete"
+    },
+    {
+      "action": "Issue technical bulletin to service centers: restart ESC module if warning appears; check CAN termination resistors.",
+      "owner": "Tom Wilson",
+      "due_date": "2026-04-18",
+      "verification": "TB-2026-447 published and distributed to all dealers",
+      "status": "Complete"
+    }
+  ],
+  "root_causes": [
+    {
+      "cause": "CAN bus termination resistor missing or disconnected at ECU connector (contact corrosion after thermal cycling).",
+      "evidence": "Oscilloscope trace shows CAN ringing (underdamped) at module startup; resistance measurement at connector pin shows >50k ohm (should be <0.1 ohm).",
+      "contributing_factors": "Thermal cycling during summer operation; connector pin plating thickness below spec (plating lot issue, supplier quality); no electrical continuity test in production assembly."
+    }
+  ],
+  "corrective_actions": [
+    {
+      "action": "Upgrade connector pins to gold-plated specification (supplier contract revision); increase plating thickness from 0.5 um to 2 um.",
+      "owner": "Tom Wilson",
+      "due_date": "2026-05-10",
+      "verification_method": "X-ray fluorescence (XRF) thickness check on first production lot",
+      "status": "In Progress"
+    },
+    {
+      "action": "Add electrical continuity test (CAN termination resistance) to in-circuit test (ICT) program at assembly station.",
+      "owner": "Mike Johnson",
+      "due_date": "2026-05-05",
+      "verification_method": "ICT program validation with engineering sample vehicles",
+      "status": "In Progress"
+    },
+    {
+      "action": "Release firmware v1.2.4 with enhanced CAN error recovery and diagnostic logging.",
+      "owner": "Sarah Chen",
+      "due_date": "2026-05-15",
+      "verification_method": "Hardware-in-loop (HIL) testing; field trial on 20 customer vehicles",
+      "status": "Planned"
+    }
+  ],
+  "prevention": [
+    {
+      "action_type": "Process Change",
+      "description": "Implement automated CAN termination resistance test into production ICT; set alarm threshold at >5 ohm."
+    },
+    {
+      "action_type": "Supplier Quality",
+      "description": "Update supplier quality agreement with pin plating thickness requirement (2.0-2.5 um Au over Ni); increase incoming inspection to 100% XRF sampling."
+    },
+    {
+      "action_type": "Design Change",
+      "description": "Review connector design for next generation; evaluate shielded/filtered CAN connectors to reduce EMI and contact stress."
+    },
+    {
+      "action_type": "Training",
+      "description": "Conduct cross-functional training on CAN bus signal integrity and connector quality; include in design review checklist."
+    }
+  ]
+}

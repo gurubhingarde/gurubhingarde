@@ -1,0 +1,249 @@
+{
+  "dia": {
+    "doc_id": "DIA-ESC-001",
+    "revision": "1.0",
+    "date": "2024-04-28",
+    "item_name": "Electronic Stability Control (ESC) System",
+    "item_def_reference": "Item-Def-ESC-001 Rev 2.0",
+    "contract_reference": "Master Supply Agreement 2024-ESC-PM-001"
+  },
+  "parties": [
+    {
+      "id": "P01",
+      "organization": "Phoenix Motors Inc.",
+      "role": "OEM",
+      "primary_contact": "Sarah Chen, VP Engineering",
+      "fusa_contact": "Michael Rodriguez, Functional Safety Manager",
+      "address": "2400 Innovation Drive, Detroit, MI 48201 USA"
+    },
+    {
+      "id": "P02",
+      "organization": "ChassisCorp Systems GmbH",
+      "role": "Tier-1",
+      "primary_contact": "Klaus Mueller, Program Manager",
+      "fusa_contact": "Dr. Anna Bergstrom, Safety Architect",
+      "address": "Wilhelm-Busch-Strasse 45, 30159 Hannover, Germany"
+    },
+    {
+      "id": "P03",
+      "organization": "Automotive Semiconductor AG",
+      "role": "IC Supplier",
+      "primary_contact": "Rajesh Verma, Account Manager",
+      "fusa_contact": "Dr. Lin Chen, Safety Lead",
+      "address": "Industrieplatz 10, 8005 Zurich, Switzerland"
+    }
+  ],
+  "scope_in": [
+    "ESC ECU hardware design (Tier-1 platform + AutoSem MCU)",
+    "ESC firmware (safety-critical algorithms, diagnostics, fail-safe modes)",
+    "Functional Safety Concept (FSC) and Technical Safety Concept (TSC) for the ESC unit",
+    "Hardware and software safety verification and validation",
+    "Integration of ESC with CAN-based vehicle control network (coordinated by OEM)",
+    "ASIL D target for all safety-critical functions"
+  ],
+  "scope_out": [
+    "Vehicle-level HARA (owned by Phoenix Motors OEM program)",
+    "Suspension, brake, or drivetrain control logic (separate Tier-1 suppliers)",
+    "Production manufacturing and supply chain qualification (separate agreement)",
+    "Field service diagnostics and fleet monitoring tools",
+    "Cybersecurity architecture (separate V2X security DIA)"
+  ],
+  "communication_channels": [
+    {
+      "channel": "Weekly Safety Coordination Call",
+      "cadence": "Every Monday, 09:00 CET",
+      "format": "Teleconference (MS Teams)",
+      "owner": "ChassisCorp (Dr. Bergstrom)",
+      "attendees": "Phoenix (Rodriguez), ChassisCorp (Bergstrom + Design Lead), AutoSem (Dr. Chen)",
+      "escalation": "Technical disagreements → Technical Lead escalation; Unresolved after 2 escalations → Program Manager decision"
+    },
+    {
+      "channel": "Monthly Safety Status Report",
+      "cadence": "Last Friday of each month",
+      "format": "Email + shared Excel tracker",
+      "owner": "ChassisCorp",
+      "attendees": "All parties (cc:)",
+      "escalation": "Red items (schedule, safety risk) trigger immediate unscheduled call"
+    },
+    {
+      "channel": "Quarterly Steering Committee",
+      "cadence": "Every Q (Jan, Apr, Jul, Oct)",
+      "format": "In-person (alternating Hannover / Detroit)",
+      "owner": "Phoenix Motors (Chen)",
+      "attendees": "VP-level from each org; full design + safety teams",
+      "escalation": "Strategic disputes (scope, timeline, cost) resolved by Steering Committee consensus"
+    },
+    {
+      "channel": "Design Review Portal",
+      "cadence": "Real-time; weekly digest",
+      "format": "Sharepoint / Jira (read-only for IC supplier)",
+      "owner": "ChassisCorp",
+      "attendees": "All parties; Phoenix has edit access for approval comments",
+      "escalation": "Review findings tracked in system; unresolved findings block milestone gate"
+    }
+  ],
+  "joint_reviews": [
+    {
+      "name": "Concept Kickoff & HARA Briefing",
+      "work_products": ["HARA", "Item Definition"],
+      "planned_date": "2024-05-15",
+      "attendees": "Phoenix (Chen, Rodriguez, Architecture), ChassisCorp (Mueller, Bergstrom, System Arch), AutoSem (Verma, Dr. Chen)",
+      "format": "In-person, Detroit; 2 days"
+    },
+    {
+      "name": "FSC Preliminary Review",
+      "work_products": ["FSC", "Architecture Boundary Assumptions"],
+      "planned_date": "2024-08-30",
+      "attendees": "Phoenix (Rodriguez, two engineers), ChassisCorp (Bergstrom, FTA Lead, HW Lead), AutoSem (Dr. Chen, Datasheet Lead)",
+      "format": "On-site at ChassisCorp Hannover; 1.5 days; includes FTA walkthrough"
+    },
+    {
+      "name": "FSC Final Review & Approval",
+      "work_products": ["FSC", "TSC Outline"],
+      "planned_date": "2024-11-15",
+      "attendees": "Phoenix (Rodriguez, Final Approver), ChassisCorp (Bergstrom, Mueller), AutoSem (Dr. Chen)",
+      "format": "Virtual; expect 6 hours of meetings over 2 days"
+    },
+    {
+      "name": "TSC & HW Architecture Review",
+      "work_products": ["TSC", "HW Safety Reqs", "HW Architecture", "HSI"],
+      "planned_date": "2025-02-28",
+      "attendees": "Phoenix (Rodriguez, HW Architecture Reviewer), ChassisCorp (Bergstrom, HW Lead, SW Arch Lead), AutoSem (Verma, Datasheet, Dr. Chen)",
+      "format": "Hybrid: HW/HSI on-site Hannover (2 days), SW architecture virtual (1 day)"
+    },
+    {
+      "name": "FMEDA Review (System + Chip)",
+      "work_products": ["System-level FMEDA", "Chip-level FMEDA", "Diagnostic Coverage Analysis"],
+      "planned_date": "2025-05-30",
+      "attendees": "Phoenix (Rodriguez, Diagnostics Reviewer), ChassisCorp (FMEA Lead), AutoSem (Dr. Chen, Reliability Lead)",
+      "format": "Virtual (3 days); detailed FMEA walkthroughs"
+    },
+    {
+      "name": "Safety Plan & Test Strategy Alignment",
+      "work_products": ["Safety Plan (draft)", "V&V Test Plan", "Simulation Strategy"],
+      "planned_date": "2025-08-15",
+      "attendees": "Phoenix (Rodriguez, Test Lead), ChassisCorp (Bergstrom, V&V Manager, Test Lead), AutoSem (Dr. Chen, Test Coordinator)",
+      "format": "On-site ChassisCorp; 2 days; includes lab tour and test environment walkthrough"
+    },
+    {
+      "name": "Safety Case Draft Review",
+      "work_products": ["Preliminary Safety Case (item + subsystem + chip levels)", "Supporting Evidence Map"],
+      "planned_date": "2025-11-30",
+      "attendees": "Phoenix (Rodriguez, Chief Safety Officer), ChassisCorp (Bergstrom, Mueller), AutoSem (Verma, Dr. Chen)",
+      "format": "On-site Phoenix Detroit; 2 days; assurance structure walkthrough"
+    }
+  ],
+  "supplier_deliverables": [
+    {
+      "name": "Functional Safety Concept (FSC)",
+      "from_party": "P02",
+      "format": "PDF (main document) + Excel (FTA, FMEA-style analysis tables)",
+      "language": "English",
+      "planned_date": "2024-11-30",
+      "acceptance_criteria": "Completes ISO 26262-4 checklist; all FSR IDs assigned; FTA nodes traceable to safety goals; no unresolved diagnostic gaps"
+    },
+    {
+      "name": "Technical Safety Concept (TSC)",
+      "from_party": "P02",
+      "format": "PDF + Excel (TSR allocation, timing budget, system FMEA)",
+      "language": "English",
+      "planned_date": "2025-03-31",
+      "acceptance_criteria": "Covers all FSRs; safety mechanisms mapped to TSRs; ASIL apportionment justified; timing analysis complete; zero open safety concerns"
+    },
+    {
+      "name": "Hardware Safety Requirements Specification",
+      "from_party": "P02",
+      "format": "Excel (requirements table) + linked Jira",
+      "language": "English",
+      "planned_date": "2025-04-30",
+      "acceptance_criteria": "Traced to TSRs; testable; includes safe states and diagnostic thresholds; AutoSem confirms feasibility"
+    },
+    {
+      "name": "Hardware Architecture & Design Documentation",
+      "from_party": "P02",
+      "format": "PDF schematic + draw.io block diagrams + Excel BOM",
+      "language": "English",
+      "planned_date": "2025-05-31",
+      "acceptance_criteria": "Schematic auditable; safety barriers clearly identified; diagnostic pathways traced; PCB layout review complete"
+    },
+    {
+      "name": "Hardware-Software Interface (HSI) Specification",
+      "from_party": "P02",
+      "format": "PDF + C header files + YAML register map",
+      "language": "English",
+      "planned_date": "2025-06-15",
+      "acceptance_criteria": "Register layout stable; interrupt timing specified; memory-mapped safety registers protected; AutoSem datasheet cross-check complete"
+    },
+    {
+      "name": "System-Level FMEDA (Hardware)",
+      "from_party": "P02",
+      "format": "Excel (FMEA table with diagnostic coverage, ASIL allocation)",
+      "language": "English",
+      "planned_date": "2025-07-31",
+      "acceptance_criteria": "All components covered; failure rates sourced (Siemens SN29500 or equivalent); diagnostic latency modeled; PMHF targets met"
+    },
+    {
+      "name": "Chip-Level FMEDA & Safety Datasheet",
+      "from_party": "P03",
+      "format": "PDF (safety datasheet) + Excel (chip FMEDA, on-chip failure modes)",
+      "language": "English",
+      "planned_date": "2025-07-15",
+      "acceptance_criteria": "Chip-level FMEDA includes on-chip logic, memory, clock faults; diagnostic coverage for each mode; Safe initialization sequence; ChassisCorp confirms usability"
+    },
+    {
+      "name": "Software Safety Requirements Specification",
+      "from_party": "P02",
+      "format": "Excel + Jira SysML model",
+      "language": "English",
+      "planned_date": "2025-08-31",
+      "acceptance_criteria": "Traced to TSRs; includes safe states, watchdog handling, mode transitions; timing assumptions explicit; zero safety-critical TBD items"
+    },
+    {
+      "name": "Software Architecture & Detailed Design",
+      "from_party": "P02",
+      "format": "C code repository (access via GitLab, read-only for Phoenix) + architecture documentation PDF",
+      "language": "English",
+      "planned_date": "2025-10-31",
+      "acceptance_criteria": "Code structure auditable; safety functions isolated; diagnostic code traced to FMEDA; unit test stubs present; no safety-critical dead code"
+    },
+    {
+      "name": "Software Verification Report (Unit & Integration Tests)",
+      "from_party": "P02",
+      "format": "PDF report + Excel test matrix + Code coverage report",
+      "language": "English",
+      "planned_date": "2025-12-31",
+      "acceptance_criteria": "MC/DC coverage ≥90% on safety-critical code; all TSRs verified; test cases traceable to requirements; zero unresolved failures"
+    },
+    {
+      "name": "Safety Plan (Joint with ChassisCorp)",
+      "from_party": "P02",
+      "format": "PDF",
+      "language": "English",
+      "planned_date": "2026-02-28",
+      "acceptance_criteria": "Covers organizational roles, communication, tool qualification, configuration management, process compliance; approved by both OEM & Tier-1"
+    },
+    {
+      "name": "Subsystem Safety Case (ChassisCorp contribution to OEM Safety Case)",
+      "from_party": "P02",
+      "format": "PDF + assurance structure (drawio or Assure tool export)",
+      "language": "English",
+      "planned_date": "2026-04-30",
+      "acceptance_criteria": "Assurance structure maps to OEM top-level safety case; all claims substantiated; no gaps in evidence chain; accepted by OEM safety authority"
+    },
+    {
+      "name": "Chip-Level Safety Case (AutoSem contribution)",
+      "from_party": "P03",
+      "format": "PDF (executive summary) + detailed assurance structure",
+      "language": "English",
+      "planned_date": "2026-03-31",
+      "acceptance_criteria": "Demonstrates ASIL D compliance at chip level; diagnostic mechanisms proven; safe state transitions verified; integrated into subsystem case by ChassisCorp"
+    }
+  ],
+  "raci_overrides": [
+    {
+      "wp_id": "WP12",
+      "party_id": "P02",
+      "raci": "A,R"
+    }
+  ]
+}

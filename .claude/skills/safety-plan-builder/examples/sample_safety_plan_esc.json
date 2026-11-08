@@ -1,0 +1,492 @@
+{
+  "project": {
+    "name": "Electronic Stability Control",
+    "doc_id": "SPL-ESC-001",
+    "revision": "0.1",
+    "date": "2026-04-28",
+    "fsm_name": "Alice Johnson",
+    "fsm_email": "alice.johnson@company.com",
+    "company": "Automotive OEM",
+    "target_asil": "D",
+    "vehicle_programs": "Project Phoenix (MY2027 Compact SUV)",
+    "suppliers": "Brake system supplier (Bosch), IMU supplier (Continental)"
+  },
+  "roles": [
+    {
+      "name": "Alice Johnson",
+      "role": "Functional Safety Manager",
+      "organization": "Safety Engineering Department",
+      "email": "alice.johnson@company.com",
+      "independence_level": "FSM (Overall responsible party)"
+    },
+    {
+      "name": "Bob Smith",
+      "role": "Project Manager",
+      "organization": "ESC Program Office",
+      "email": "bob.smith@company.com",
+      "independence_level": "PM"
+    },
+    {
+      "name": "Carol Davis",
+      "role": "Hardware Lead",
+      "organization": "Hardware Engineering",
+      "email": "carol.davis@company.com",
+      "independence_level": "I2 (Different team)"
+    },
+    {
+      "name": "David Chen",
+      "role": "Software Lead",
+      "organization": "Software Engineering",
+      "email": "david.chen@company.com",
+      "independence_level": "I2 (Different team)"
+    },
+    {
+      "name": "Eve Williams",
+      "role": "Confirmation Reviewer",
+      "organization": "Quality Assurance Department",
+      "email": "eve.williams@company.com",
+      "independence_level": "I3 (Separate org unit, external audit authority)"
+    },
+    {
+      "name": "Frank Martinez",
+      "role": "Functional Safety Assessor",
+      "organization": "Independent Assessment (Third Party)",
+      "email": "frank.martinez@assessor.com",
+      "independence_level": "I3 (External)"
+    },
+    {
+      "name": "Customer Liaison",
+      "role": "Customer Interface",
+      "organization": "Customer Engineering",
+      "email": "customer@vehicle.com",
+      "independence_level": "I3 (External)"
+    }
+  ],
+  "tailoring": [
+    {
+      "clause": "Part 2 (Management of Functional Safety)",
+      "applicable": "Yes",
+      "justification": "Applies to all projects"
+    },
+    {
+      "clause": "Part 3 (Concept Phase)",
+      "applicable": "Yes",
+      "justification": "Item definition, HARA, and FSC derivation required"
+    },
+    {
+      "clause": "Part 4 (System Level)",
+      "applicable": "Yes",
+      "justification": "TSC and system requirements specification required"
+    },
+    {
+      "clause": "Part 5 (Hardware Level)",
+      "applicable": "Yes",
+      "justification": "ECU design, FMEDA, and hardware integration test required"
+    },
+    {
+      "clause": "Part 6 (Software Level)",
+      "applicable": "Yes",
+      "justification": "New SW development for ESC control algorithms"
+    },
+    {
+      "clause": "Part 7 (Production)",
+      "applicable": "Partial",
+      "justification": "Production and service procedures required; decommissioning not yet applicable"
+    },
+    {
+      "clause": "Part 8 (Analysis)",
+      "applicable": "Yes",
+      "justification": "FMEA, FTA, and proof test procedures required"
+    }
+  ],
+  "work_products": [
+    {
+      "wp_id": "WP-001",
+      "name": "Safety Plan",
+      "iso_reference": "Part 2, Clause 6.2",
+      "owner": "Alice Johnson",
+      "target_asil": "D",
+      "planned_date": "2026-05-15",
+      "actual_date": "",
+      "status": "In Progress"
+    },
+    {
+      "wp_id": "WP-002",
+      "name": "Item Definition",
+      "iso_reference": "Part 3, Clause 5.2",
+      "owner": "Bob Smith",
+      "target_asil": "D",
+      "planned_date": "2026-05-30",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-003",
+      "name": "Hazard Analysis and Risk Assessment (HARA)",
+      "iso_reference": "Part 3, Clause 5.3",
+      "owner": "Alice Johnson",
+      "target_asil": "D",
+      "planned_date": "2026-06-30",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-004",
+      "name": "Safety Goals",
+      "iso_reference": "Part 3, Clause 5.4",
+      "owner": "Alice Johnson",
+      "target_asil": "D",
+      "planned_date": "2026-07-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-005",
+      "name": "Functional Safety Concept (FSC)",
+      "iso_reference": "Part 3, Clause 5.5",
+      "owner": "Bob Smith",
+      "target_asil": "D",
+      "planned_date": "2026-08-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-006",
+      "name": "System Architecture",
+      "iso_reference": "Part 4, Clause 6.4",
+      "owner": "David Chen",
+      "target_asil": "D",
+      "planned_date": "2026-09-01",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-007",
+      "name": "Technical Safety Concept (TSC)",
+      "iso_reference": "Part 4, Clause 6.5",
+      "owner": "David Chen",
+      "target_asil": "D",
+      "planned_date": "2026-09-30",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-008",
+      "name": "System Verification Plan",
+      "iso_reference": "Part 4, Clause 6.6",
+      "owner": "Bob Smith",
+      "target_asil": "D",
+      "planned_date": "2026-10-01",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-009",
+      "name": "Hardware Architecture",
+      "iso_reference": "Part 5, Clause 7.4",
+      "owner": "Carol Davis",
+      "target_asil": "D",
+      "planned_date": "2026-09-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-010",
+      "name": "Hardware Design Specification",
+      "iso_reference": "Part 5, Clause 7.5",
+      "owner": "Carol Davis",
+      "target_asil": "D",
+      "planned_date": "2026-10-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-011",
+      "name": "FMEDA (Hardware)",
+      "iso_reference": "Part 5, Clause 7.6",
+      "owner": "Carol Davis",
+      "target_asil": "D",
+      "planned_date": "2026-11-01",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-012",
+      "name": "Hardware Integration Test Plan",
+      "iso_reference": "Part 5, Clause 7.7",
+      "owner": "Carol Davis",
+      "target_asil": "D",
+      "planned_date": "2026-11-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-013",
+      "name": "Software Architecture",
+      "iso_reference": "Part 6, Clause 8.3",
+      "owner": "David Chen",
+      "target_asil": "D",
+      "planned_date": "2026-09-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-014",
+      "name": "Software Unit Design Specification",
+      "iso_reference": "Part 6, Clause 8.4",
+      "owner": "David Chen",
+      "target_asil": "D",
+      "planned_date": "2026-10-30",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-015",
+      "name": "Software Unit Verification",
+      "iso_reference": "Part 6, Clause 8.5",
+      "owner": "David Chen",
+      "target_asil": "D",
+      "planned_date": "2026-11-30",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-016",
+      "name": "Software Integration Test Plan",
+      "iso_reference": "Part 6, Clause 8.6",
+      "owner": "David Chen",
+      "target_asil": "D",
+      "planned_date": "2026-12-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-017",
+      "name": "Software Verification Report",
+      "iso_reference": "Part 6, Clause 8.7",
+      "owner": "David Chen",
+      "target_asil": "D",
+      "planned_date": "2027-01-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-018",
+      "name": "System Verification Report",
+      "iso_reference": "Part 4, Clause 6.7",
+      "owner": "Bob Smith",
+      "target_asil": "D",
+      "planned_date": "2027-02-01",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-019",
+      "name": "Functional Safety Analysis (FMEA/FTA)",
+      "iso_reference": "Part 8, Clause 8.1",
+      "owner": "Alice Johnson",
+      "target_asil": "D",
+      "planned_date": "2027-01-01",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-020",
+      "name": "Proof Test and Metric Report",
+      "iso_reference": "Part 8, Clause 8.2",
+      "owner": "David Chen",
+      "target_asil": "D",
+      "planned_date": "2027-02-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-021",
+      "name": "Production Plan",
+      "iso_reference": "Part 7, Clause 7.2",
+      "owner": "Bob Smith",
+      "target_asil": "D",
+      "planned_date": "2027-02-01",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-022",
+      "name": "Modification Procedure",
+      "iso_reference": "Part 7, Clause 7.3",
+      "owner": "Bob Smith",
+      "target_asil": "D",
+      "planned_date": "2027-02-15",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-023",
+      "name": "Verification and Validation Plan",
+      "iso_reference": "Part 2, Clause 6.3",
+      "owner": "Bob Smith",
+      "target_asil": "D",
+      "planned_date": "2026-05-20",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-024",
+      "name": "Development Plan (SDLC)",
+      "iso_reference": "Part 2, Clause 6.4",
+      "owner": "David Chen",
+      "target_asil": "D",
+      "planned_date": "2026-05-20",
+      "actual_date": "",
+      "status": "Not Started"
+    },
+    {
+      "wp_id": "WP-025",
+      "name": "Functional Safety Assessment Report",
+      "iso_reference": "Part 2, Clause 6.6.5",
+      "owner": "Frank Martinez",
+      "target_asil": "D",
+      "planned_date": "2027-03-01",
+      "actual_date": "",
+      "status": "Not Started"
+    }
+  ],
+  "tools": [
+    {
+      "name": "MATLAB/Simulink",
+      "vendor": "MathWorks",
+      "version": "2024a",
+      "usage": "Control law design, algorithm development, and HIL simulation for ESC SW requirements derivation",
+      "tcl": "TCL3",
+      "tcl_rationale": "MATLAB output directly influences safety-critical control algorithms; TCL3 requires full qualification or independent development",
+      "qualification_status": "Planned: ISO 26262-8 Clause 11 qualification per MathWorks certificate"
+    },
+    {
+      "name": "GitLab",
+      "vendor": "GitLab Inc",
+      "version": "Current SaaS",
+      "usage": "Version control, configuration management, and change tracking for HW and SW",
+      "tcl": "TCL1",
+      "tcl_rationale": "Tool output (version history) does not influence safety decisions; manual code review and testing validate correctness independently",
+      "qualification_status": "No qualification required (TCL1)"
+    },
+    {
+      "name": "Polarion ALM",
+      "vendor": "Siemens",
+      "version": "2024.1",
+      "usage": "Requirements management, traceability matrix, test case management, issue tracking for all safety artifacts",
+      "tcl": "TCL2",
+      "tcl_rationale": "Polarion output influences safety decision flow (traceability, requirements allocation); needs qualification or extensive manual verification",
+      "qualification_status": "Planned: Qualification per IEC 62304 + ISO 26262-8 addendum"
+    },
+    {
+      "name": "CANoe",
+      "vendor": "Vector Informatik",
+      "version": "16.0",
+      "usage": "CAN bus simulation, message monitoring, and HIL testing for ESC system integration",
+      "tcl": "TCL2",
+      "tcl_rationale": "CANoe simulation results influence test design and integration decisions; manual verification of simulation against spec required",
+      "qualification_status": "Qualification planned"
+    },
+    {
+      "name": "MATLAB Test Manager",
+      "vendor": "MathWorks",
+      "usage": "Unit test automation and coverage analysis for SW verification",
+      "tcl": "TCL3",
+      "tcl_rationale": "Test coverage metrics influence release decision; TCL3 requires verification of tool correctness",
+      "qualification_status": "Qualification planned as part of MATLAB suite"
+    },
+    {
+      "name": "draw.io / Diagrams.net",
+      "vendor": "JGraph Ltd",
+      "version": "Web app",
+      "usage": "Block diagrams, fault trees, interface diagrams for documentation",
+      "tcl": "TCL1",
+      "tcl_rationale": "Diagrams are documentation only; correctness verified by manual review, not tool output",
+      "qualification_status": "No qualification required (TCL1)"
+    },
+    {
+      "name": "MISRA C:2012 Compliance Checker (Parasoft)",
+      "vendor": "Parasoft",
+      "version": "2024.1",
+      "usage": "Static code analysis and MISRA C:2012 rule enforcement for SW coding",
+      "tcl": "TCL2",
+      "tcl_rationale": "Tool findings influence code review and defect closure; requires verification that violations are not false negatives",
+      "qualification_status": "Planned per ISO 26262-8"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "M01",
+      "name": "Project Kickoff",
+      "target_date": "2026-05-01",
+      "predecessors": "",
+      "status": "Completed",
+      "notes": "Safety plan draft, team assigned"
+    },
+    {
+      "id": "M02",
+      "name": "Safety Plan Review and Approval",
+      "target_date": "2026-05-15",
+      "predecessors": "M01",
+      "status": "In Progress",
+      "notes": "FSM and customer sign-off required"
+    },
+    {
+      "id": "M03",
+      "name": "Item Definition and HARA Review",
+      "target_date": "2026-07-15",
+      "predecessors": "M02",
+      "status": "Planned",
+      "notes": "ASIL D confirmation review required (I3)"
+    },
+    {
+      "id": "M04",
+      "name": "Safety Goals and FSC Review",
+      "target_date": "2026-08-31",
+      "predecessors": "M03",
+      "status": "Planned",
+      "notes": "Concept phase exit gate"
+    },
+    {
+      "id": "M05",
+      "name": "System Design and TSC Review",
+      "target_date": "2026-10-31",
+      "predecessors": "M04",
+      "status": "Planned",
+      "notes": "System and HW/SW architecture reviews"
+    },
+    {
+      "id": "M06",
+      "name": "HW and SW Design Reviews",
+      "target_date": "2026-12-15",
+      "predecessors": "M05",
+      "status": "Planned",
+      "notes": "Detailed design phase exit"
+    },
+    {
+      "id": "M07",
+      "name": "Verification Complete",
+      "target_date": "2027-02-15",
+      "predecessors": "M06",
+      "status": "Planned",
+      "notes": "Unit, integration, and system testing complete"
+    },
+    {
+      "id": "M08",
+      "name": "Functional Safety Assessment",
+      "target_date": "2027-03-01",
+      "predecessors": "M07",
+      "status": "Planned",
+      "notes": "Independent assessor sign-off"
+    },
+    {
+      "id": "M09",
+      "name": "Release to Production",
+      "target_date": "2027-03-31",
+      "predecessors": "M08",
+      "status": "Planned",
+      "notes": "Production ready"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "ecu": {"name":"Body Control Module","abbr":"BCM","project":"HV2024","doc_id":"CDD-BCM-001",
+          "revision":"0.1","date":"2026-08-11","author":"Diag Team","approver":"Lead",
+          "supplier":"TierOne","hw_version":"HW-A2","sw_version":"SW-1.4.0","market":"EU"},
+  "sessions": [
+    {"id":"0x01","name":"Default","default_session":true,"description":"Default session","transitions":"->0x03"},
+    {"id":"0x03","name":"Extended","default_session":false,"description":"Extended diagnostic","transitions":"->0x01"}
+  ],
+  "services": [
+    {"service_id":"0x22","name":"ReadDataByIdentifier","enabled":true,"description":"Read DID","data_length":"var"},
+    {"service_id":"0x2E","name":"WriteDataByIdentifier","enabled":true,"description":"Write DID","data_length":"var"},
+    {"service_id":"0x31","name":"RoutineControl","enabled":true,"description":"Run routine","data_length":"var"}
+  ],
+  "diids": [
+    {"id":"0xF190","name":"VIN","read_access":true,"write_access":false,"periodic_data_identifier":false,"description":"Vehicle Identification Number"},
+    {"id":"0xF187","name":"SparePartNumber","read_access":true,"write_access":false,"periodic_data_identifier":false,"description":"Spare part number"}
+  ],
+  "riids": [
+    {"id":"0x0203","name":"EraseMemory","routine_control_type":"startRoutine","description":"Erase flash","options":"-"}
+  ],
+  "security_levels": [
+    {"level":"0x01","request_seed_service":"27 01","send_key_service":"27 02","description":"Programming"}
+  ],
+  "variant_coding": [
+    {"variant_id":"V01","variant_name":"EU base","parent_variant":"-","differences":"no heated seats"}
+  ],
+  "dtc_catalog_ref": "BCM-dtc-catalog.xlsx"
+}

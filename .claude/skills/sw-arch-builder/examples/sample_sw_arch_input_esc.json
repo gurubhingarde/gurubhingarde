@@ -1,0 +1,186 @@
+{
+  "project": {
+    "name": "Project Phoenix - MY2027 Compact SUV",
+    "doc_id": "SWARCH-ESC-001",
+    "revision": "0.1",
+    "date": "2026-04-29",
+    "author": "Software Architect",
+    "approver": "Safety Manager",
+    "fsc_ref": "FSC_ESC_demo.xlsx"
+  },
+  "linked_tsc": "/sessions/vigilant-ecstatic-maxwell/mnt/CL work/tsc-builder/examples/TSC_ESC_demo.xlsx",
+  "rtos": {
+    "name": "AUTOSAR Classic OS / OSEK",
+    "version": "4.3",
+    "scheduling": "priority preemptive",
+    "tick_ms": 1,
+    "mpu": true,
+    "hypervisor": false,
+    "irq_latency_us": "10",
+    "asil": "B(D)"
+  },
+  "swcs": [
+    {
+      "id": "SWC01",
+      "name": "Yaw Control App",
+      "partition": "SP01",
+      "type": "Application",
+      "language": "C",
+      "asil": "B(D)",
+      "misra_scope": "Required+Advisory",
+      "mechanisms": ["SM03", "SM04"]
+    },
+    {
+      "id": "SWC02",
+      "name": "Sensor Plausibility",
+      "partition": "SP01",
+      "type": "Service",
+      "language": "C",
+      "asil": "B(D)",
+      "misra_scope": "Required",
+      "mechanisms": ["SM10", "SM11"]
+    },
+    {
+      "id": "SWC03",
+      "name": "Brake Modulator Driver",
+      "partition": "SP01",
+      "type": "Driver",
+      "language": "C",
+      "asil": "B(D)",
+      "misra_scope": "Required",
+      "mechanisms": ["SM04"]
+    },
+    {
+      "id": "SWC04",
+      "name": "Safety Monitor",
+      "partition": "SP02",
+      "type": "Diagnostic",
+      "language": "C",
+      "asil": "B(D)",
+      "misra_scope": "Mandatory",
+      "mechanisms": ["SM03"]
+    },
+    {
+      "id": "SWC05",
+      "name": "DTC Manager",
+      "partition": "SP03",
+      "type": "Diagnostic",
+      "language": "C",
+      "asil": "QM",
+      "misra_scope": "Advisory",
+      "mechanisms": []
+    },
+    {
+      "id": "SWC06",
+      "name": "CAN Stack",
+      "partition": "SP04",
+      "type": "Service",
+      "language": "C",
+      "asil": "ASIL D",
+      "misra_scope": "Required+Advisory",
+      "mechanisms": ["SM13"]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T01",
+      "name": "ESC_5ms",
+      "period": 5,
+      "priority": 10,
+      "wcet": 1.5,
+      "swcs": ["SWC01", "SWC02"],
+      "deadline": 5
+    },
+    {
+      "id": "T02",
+      "name": "Diag_50ms",
+      "period": 50,
+      "priority": 5,
+      "wcet": 8,
+      "swcs": ["SWC04", "SWC05"],
+      "deadline": 50
+    },
+    {
+      "id": "T03",
+      "name": "ESC_actuator_2ms",
+      "period": 2,
+      "priority": 15,
+      "wcet": 0.5,
+      "swcs": ["SWC03"],
+      "deadline": 2
+    }
+  ],
+  "interfaces": [
+    {
+      "from_swc": "SWC02",
+      "to_swc": "SWC01",
+      "name": "Sensor_Data_Port",
+      "type": "data",
+      "payload": "struct{yaw_rate, accel_lat}",
+      "integrity": "CRC",
+      "sync": true,
+      "error_handling": "Range check + fault flag"
+    },
+    {
+      "from_swc": "SWC01",
+      "to_swc": "SWC03",
+      "name": "Control_Command_Port",
+      "type": "event",
+      "payload": "struct{pressure_cmd, timeout}",
+      "integrity": "E2E",
+      "sync": true,
+      "error_handling": "Timeout handler"
+    },
+    {
+      "from_swc": "SWC06",
+      "to_swc": "SWC04",
+      "name": "CAN_Msg_Port",
+      "type": "CAN",
+      "payload": "CAN frame",
+      "integrity": "CRC + Counter",
+      "sync": false,
+      "error_handling": "Retry + reporting"
+    }
+  ],
+  "mpu_regions": [
+    {
+      "id": "MPU_SP01",
+      "base_addr": "0x20000000",
+      "size": "0x00010000",
+      "access": "RW",
+      "partition": "SP01",
+      "fault_behavior": "Fault handler + reset"
+    },
+    {
+      "id": "MPU_SP02",
+      "base_addr": "0x20010000",
+      "size": "0x00008000",
+      "access": "RW",
+      "partition": "SP02",
+      "fault_behavior": "Fault handler + log"
+    }
+  ],
+  "init_phases": [
+    {
+      "phase": "Bootloader",
+      "duration": 10,
+      "swcs": [],
+      "bist": "ROM+RAM+FLASH",
+      "fault": "Halt with error indicator"
+    },
+    {
+      "phase": "OS Start",
+      "duration": 5,
+      "swcs": [],
+      "bist": "CRC check of config",
+      "fault": "Retry init"
+    },
+    {
+      "phase": "APP Start",
+      "duration": 50,
+      "swcs": ["SWC01", "SWC02", "SWC03", "SWC04"],
+      "bist": "Functional BIST",
+      "fault": "Degraded mode (limited ESC)"
+    }
+  ]
+}

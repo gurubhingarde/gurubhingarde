@@ -1,0 +1,322 @@
+{
+  "program": {
+    "name": "ESC ECU Design Rev C",
+    "part_name": "Electronic Stability Control ECU",
+    "part_number": "ESC-ECU-001-R3",
+    "model_year": "2027",
+    "design_owner": "Controls Engineering Lead",
+    "doc_id": "DFMEA-ESC-ECU-001",
+    "revision": "1.0",
+    "date": "2025-04-29",
+    "fmea_team": "Controls Team, Electrical Lead, Systems Engineer, Manufacturing Engineer",
+    "customer": "OEM XYZ Corporation",
+    "company": "Automotive Supplier ABC",
+    "design_responsibility": "Design: Supplier; Manufacturing: OEM Contract Facility"
+  },
+  "structure": [
+    {
+      "id": "SYS-001",
+      "level": "System",
+      "name": "ESC ECU System",
+      "parent": null
+    },
+    {
+      "id": "SS-001",
+      "level": "Subsystem",
+      "name": "Sensing Module",
+      "parent": "SYS-001"
+    },
+    {
+      "id": "SS-002",
+      "level": "Subsystem",
+      "name": "Computing Module",
+      "parent": "SYS-001"
+    },
+    {
+      "id": "SS-003",
+      "level": "Subsystem",
+      "name": "Actuation Module",
+      "parent": "SYS-001"
+    },
+    {
+      "id": "SS-004",
+      "level": "Subsystem",
+      "name": "Communication Module",
+      "parent": "SYS-001"
+    },
+    {
+      "id": "COMP-001",
+      "level": "Component",
+      "name": "Wheel Speed Sensor Interface",
+      "parent": "SS-001"
+    },
+    {
+      "id": "COMP-002",
+      "level": "Component",
+      "name": "Inertial Measurement Unit (IMU)",
+      "parent": "SS-001"
+    },
+    {
+      "id": "COMP-003",
+      "level": "Component",
+      "name": "Main MCU (Dual-Core Lockstep)",
+      "parent": "SS-002"
+    },
+    {
+      "id": "COMP-004",
+      "level": "Component",
+      "name": "Brake Modulator Driver",
+      "parent": "SS-003"
+    },
+    {
+      "id": "COMP-005",
+      "level": "Component",
+      "name": "CAN Bus Interface",
+      "parent": "SS-004"
+    }
+  ],
+  "functions": [
+    {
+      "id": "F001",
+      "parent_id": "SYS-001",
+      "function_statement": "Prevent unintended yaw rotation by detecting wheel slip and applying corrective brake pressure",
+      "requirement_ref": "REQ-ESC-001"
+    },
+    {
+      "id": "F002",
+      "parent_id": "SS-001",
+      "function_statement": "Monitor wheel speed from all four wheels in real-time",
+      "requirement_ref": "REQ-SENSE-001"
+    },
+    {
+      "id": "F003",
+      "parent_id": "SS-001",
+      "function_statement": "Measure vehicle yaw rate and lateral acceleration",
+      "requirement_ref": "REQ-SENSE-002"
+    },
+    {
+      "id": "F004",
+      "parent_id": "SS-002",
+      "function_statement": "Compute slip ratio and execute ESC algorithm with lockstep integrity",
+      "requirement_ref": "REQ-COMPUTE-001"
+    },
+    {
+      "id": "F005",
+      "parent_id": "SS-003",
+      "function_statement": "Apply brake pressure to individual wheels via solenoid drivers",
+      "requirement_ref": "REQ-ACT-001"
+    },
+    {
+      "id": "F006",
+      "parent_id": "SS-004",
+      "function_statement": "Communicate ECU status and receive commands from vehicle network (CAN)",
+      "requirement_ref": "REQ-COMM-001"
+    }
+  ],
+  "failure_modes": [
+    {
+      "id": "FM001",
+      "focus_element_id": "COMP-001",
+      "function_id": "F002",
+      "failure_mode": "Wheel speed sensor signal loss (open circuit or corrosion)",
+      "failure_effect_next": "Loss of speed feedback to Main MCU; speed channel shows zero",
+      "failure_effect_user": "ESC algorithm cannot estimate slip; potential loss of yaw control; vehicle may spin out in emergency maneuver",
+      "severity": 9,
+      "failure_cause": "Connector corrosion due to moisture ingress; potting compound not fully sealing connector entry point",
+      "occurrence": 4,
+      "prevention_control": "Sealed connector design with hydrophobic membrane; potting process with high fill percentage validation",
+      "detection_control": "CAN message timeout check (100 ms); on-board diagnostic triggers fault code; manufacturing potting 100% inspection",
+      "detection": 8,
+      "recommended_action": "Increase connector sealing test duration to 1000 hrs salt-fog per ASTM B117; implement 100% potting visual + X-ray sampling in production",
+      "owner": "Electrical Lead",
+      "target_date": "2025-06-15"
+    },
+    {
+      "id": "FM002",
+      "focus_element_id": "COMP-003",
+      "function_id": "F004",
+      "failure_mode": "Lockstep mismatch in dual-core MCU undetected",
+      "failure_effect_next": "One core executes incorrect ESC algorithm; cross-core check does not catch corruption due to design gap",
+      "failure_effect_user": "Unintended brake apply or brake inhibition; loss of vehicle control; safety-critical hazard",
+      "severity": 10,
+      "failure_cause": "Single-bit flip in memory-mapped register not covered by lockstep checker; checker has blind spot in shadow memory region",
+      "occurrence": 2,
+      "prevention_control": "Implement comprehensive lockstep checker covering all critical registers; Fault Injection Analysis (FIA) to validate coverage",
+      "detection_control": "Lockstep mismatch detector triggers immediate safe state (brake release, CAN alert); real-time watchdog every 10 ms",
+      "detection": 3,
+      "recommended_action": "Run FIA on final MCU design with all process variations; extend checker to cover shadow registers; independent safety audit per ISO 26262 ASIL D",
+      "owner": "Controls Team Lead",
+      "target_date": "2025-05-30"
+    },
+    {
+      "id": "FM003",
+      "focus_element_id": "COMP-004",
+      "function_id": "F005",
+      "failure_mode": "Brake solenoid stuck-on (always applies brake pressure)",
+      "failure_effect_next": "Continuous brake pressure on one wheel; vehicle pulled to that side",
+      "failure_effect_user": "Vehicle slows and veers unexpectedly; loss of control; potential crash if on highway or during evasive maneuver",
+      "severity": 9,
+      "failure_cause": "Solenoid spool seized due to particulate contamination in brake fluid or internal manufacturing defect",
+      "occurrence": 3,
+      "prevention_control": "Brake fluid particle filtration (4-micron minimum); solenoid internal design review for contamination resistance; supplier qualification audit",
+      "detection_control": "Pressure sensor feedback check (detects unexpected high pressure); on-board diagnostic monitors pressure vs. command; EMC testing for noise immunity",
+      "detection": 7,
+      "recommended_action": "Implement high-resolution pressure sensor (0.5 bar resolution); develop algorithm to detect stuck solenoid within 200 ms; validate with hardware-in-loop (HIL) testing",
+      "owner": "Systems Engineer",
+      "target_date": "2025-06-30"
+    },
+    {
+      "id": "FM004",
+      "focus_element_id": "COMP-002",
+      "function_id": "F003",
+      "failure_mode": "IMU yaw rate output drift over temperature range",
+      "failure_effect_next": "Computed yaw rate diverges from actual; slip detection becomes inaccurate; algorithm may over- or under-estimate correction",
+      "failure_effect_user": "Erratic ESC behavior; unwanted braking or brake inhibition; customer notices unstable handling in dynamic situations",
+      "severity": 7,
+      "failure_cause": "IMU temperature coefficient not fully compensated in firmware; sensor aging or manufacturing tolerance stack-up of gyroscope bias",
+      "occurrence": 5,
+      "prevention_control": "Firmware temperature compensation algorithm calibrated across full range (-40 to +85°C); component selection with low temperature coefficient specification",
+      "detection_control": "Cross-check IMU yaw rate with wheel speed-derived yaw rate; algorithm flags large divergence as diagnostic warning; design validation testing includes thermal cycling",
+      "detection": 6,
+      "recommended_action": "Perform temperature cycling test (-40 to +85°C, 100 cycles) with yaw rate logging; calibrate firmware compensation if drift exceeds ±2°/s; document thermal model",
+      "owner": "Electrical Lead",
+      "target_date": "2025-07-15"
+    },
+    {
+      "id": "FM005",
+      "focus_element_id": "COMP-005",
+      "function_id": "F006",
+      "failure_mode": "CAN message loss or corruption (bit error)",
+      "failure_effect_next": "ECU does not receive brake command from main controller or sends corrupted status; timeout triggers inhibition of ESC function",
+      "failure_effect_user": "ESC function unavailable; vehicle without yaw control in emergency situation; safety risk if depends on ESC",
+      "severity": 8,
+      "failure_cause": "EMI coupling to CAN bus from high-current brake solenoid switching; insufficient shielding or termination resistance out of tolerance",
+      "occurrence": 4,
+      "prevention_control": "CAN bus shielding and twisted pair routing per automotive standard (ISO 11898); transceiver surge protection (±25 kV ESD); solenoid flyback diode and RC snubber",
+      "detection_control": "CAN message CRC check and timeout monitor; ECU detects loss and enters safe state; manufacturing EMC test (conducted immunity per ISO 11452-4)",
+      "detection": 6,
+      "recommended_action": "Perform conducted immunity (CI) testing up to 20A on CAN bus; validate shielding continuity 100% in assembly; implement watchdog timeout < 50 ms",
+      "owner": "Electrical Lead",
+      "target_date": "2025-06-20"
+    },
+    {
+      "id": "FM006",
+      "focus_element_id": "COMP-003",
+      "function_id": "F004",
+      "failure_mode": "Software timeout in main control loop not implemented; task misses execution deadline",
+      "failure_effect_next": "Algorithm iteration delayed; brake command not issued on time; ESC response latency > 100 ms spec",
+      "failure_effect_user": "Delayed ESC engagement during emergency maneuver; insufficient correction; potential vehicle instability or spin-out",
+      "severity": 9,
+      "failure_cause": "Software scheduler does not enforce deadline; watchdog timer not implemented or disabled; real-time OS misconfiguration",
+      "occurrence": 3,
+      "prevention_control": "Implement hardware watchdog timer with 50 ms timeout; software code review checklist for real-time deadline compliance; RTOS configuration audit",
+      "detection_control": "Watchdog fires on timeout; ECU enters safe state (brake release, CAN alert); integration test with load injection to verify deadline adherence",
+      "detection": 4,
+      "recommended_action": "Implement watchdog at hardware level (separate timer IC); validate with system-level testing under worst-case CPU load; document timing budget with margins",
+      "owner": "Controls Team Lead",
+      "target_date": "2025-05-20"
+    },
+    {
+      "id": "FM007",
+      "focus_element_id": "COMP-001",
+      "function_id": "F002",
+      "failure_mode": "Wheel speed sensor intermittent signal (noise spikes, momentary loss)",
+      "failure_effect_next": "Noisy speed feedback or periodic zero-crossings; algorithm sees false slip condition; ESC may apply brake incorrectly",
+      "failure_effect_user": "Unintended brake apply; vehicle jerks or lurches; customer experiences uncomfortable or unsafe handling",
+      "severity": 8,
+      "failure_cause": "Connector pin oxidation causing intermittent contact; inadequate signal filtering; sensor connector vibration from mounting looseness",
+      "occurrence": 5,
+      "prevention_control": "Gold-plated connector contacts; connectors rated for automotive temperature and vibration; mechanical strain relief design review",
+      "detection_control": "Signal filtering (low-pass filter design validated); plausibility check (speed must be continuous, no step changes > threshold); diagnostic fault code on dropout",
+      "detection": 5,
+      "recommended_action": "Implement hardware filter (RC or active filter) with -3dB cutoff 5 kHz; software plausibility check: flag spike if speed change > 10 km/h in one sample period",
+      "owner": "Electrical Lead",
+      "target_date": "2025-06-10"
+    },
+    {
+      "id": "FM008",
+      "focus_element_id": "COMP-004",
+      "function_id": "F005",
+      "failure_mode": "Brake solenoid coil insulation breakdown (short to case ground)",
+      "failure_effect_next": "Solenoid driver short-circuit; power supply current surge; driver IC may fail or shut down due to overcurrent detection",
+      "failure_effect_user": "Loss of brake actuation on that wheel; potential loss of ESC function; vehicle yaw control impaired",
+      "severity": 9,
+      "failure_cause": "Coil insulation damaged by thermal cycling or contamination; solenoid coil manufacturing defect; inadequate voltage clamping",
+      "occurrence": 2,
+      "prevention_control": "Solenoid supplier quality audit and AQL 0.65; over-voltage clamping circuit (TVS diode or active clamp) on solenoid supply; thermal stress test during design validation",
+      "detection_control": "Driver IC monitors coil resistance (open-circuit detection + short-circuit detection); on-board diagnostic triggers DTC if anomaly detected; manufacturing solenoid insulation test (1.5 kV hi-pot)",
+      "detection": 6,
+      "recommended_action": "Implement high-side driver with integrated short-circuit protection and diagnostics; 100% hi-pot testing of solenoids in production (1.5 kV for 1 sec per IEC 60950)",
+      "owner": "Electrical Lead",
+      "target_date": "2025-07-01"
+    },
+    {
+      "id": "FM009",
+      "focus_element_id": "COMP-005",
+      "function_id": "F006",
+      "failure_mode": "CAN transceiver failure (stuck high or low, not driving bus)",
+      "failure_effect_next": "ECU cannot communicate; commands not received; status not sent; timeout occurs on vehicle controller side",
+      "failure_effect_user": "ESC function disabled by master controller; vehicle loses electronic stability control; safety hazard in dynamic situation",
+      "severity": 9,
+      "failure_cause": "Transceiver IC ESD damage during handling or assembly; thermal overstress; power supply transient (under-voltage spike)",
+      "occurrence": 3,
+      "prevention_control": "ESD protection during manufacturing (grounding straps, static mat); transceiver surge protection (series resistor, ESD TVS); power supply filtering and regulation",
+      "detection_control": "CAN bus monitor function checks transceiver response to message arbitration; timeout triggers safe state; manufacturing ESD test (per IEC 61000-4-2, ±8 kV contact)",
+      "detection": 5,
+      "recommended_action": "Add series protection resistor (100 ohm) on CAN lines at transceiver input; implement power supply filtering (bulk + ceramic capacitors); validate ESD immunity test per OEM spec",
+      "owner": "Electrical Lead",
+      "target_date": "2025-06-25"
+    },
+    {
+      "id": "FM010",
+      "focus_element_id": "SS-002",
+      "function_id": "F004",
+      "failure_mode": "Firmware algorithm division by zero or NaN propagation",
+      "failure_effect_next": "Computation returns invalid value (inf, NaN); subsequent algorithm step propagates invalid value; brake command may become erratic",
+      "failure_effect_user": "Unpredictable ESC behavior; unintended brake apply or complete loss of ESC function; safety hazard",
+      "severity": 9,
+      "failure_cause": "Algorithm input plausibility check not implemented; edge case in denominator calculation (e.g., zero wheel speed difference); floating-point error handling missing",
+      "occurrence": 2,
+      "prevention_control": "Input validation layer before algorithm execution; check denominators are non-zero; use fixed-point arithmetic if suitable; code review checklist for division and FP operations",
+      "detection_control": "Output range check after algorithm; NaN/inf detection triggers safe state; unit and integration testing with edge-case injection",
+      "detection": 3,
+      "recommended_action": "Add guard clause: if denominator < 0.1, skip algorithm iteration or use default safe value; implement NaN trap in firmware startup; unit test with edge cases (wheel speed = 0, extreme values)",
+      "owner": "Controls Team Lead",
+      "target_date": "2025-05-25"
+    },
+    {
+      "id": "FM011",
+      "focus_element_id": "COMP-003",
+      "function_id": "F004",
+      "failure_mode": "MCU power supply transient (brown-out or spike) causes memory corruption",
+      "failure_effect_next": "Data in RAM or NVM corrupted; algorithm state invalid; ECU behavior unpredictable",
+      "failure_effect_user": "Potential loss of ESC function or erratic behavior; safety risk if happens during dynamic driving",
+      "severity": 8,
+      "failure_cause": "Solenoid switching transient on shared power supply; inadequate bulk capacitance; power supply filtering not sufficient",
+      "occurrence": 4,
+      "prevention_control": "Dual power supplies (one for analog, one for digital); bulk capacitor (100+ uF) + ceramic (10 uF) right at MCU pins; power supply 3.3V regulation with transient response time < 1 us",
+      "detection_control": "CRC check on critical data every 100 ms; ESD / transient immunity testing per ISO 11452-5 (transient burst); watchdog timer detects MCU hang",
+      "detection": 5,
+      "recommended_action": "Implement power supply filtering per MCU datasheet recommendations; add CRC calculation on algorithm state; validate transient immunity testing; document power budget and margins",
+      "owner": "Electrical Lead",
+      "target_date": "2025-06-20"
+    },
+    {
+      "id": "FM012",
+      "focus_element_id": "COMP-002",
+      "function_id": "F003",
+      "failure_mode": "IMU sensor initialization or calibration failure on power-up",
+      "failure_effect_next": "IMU returns zero or invalid yaw rate from startup; algorithm does not detect bad sensor; uses wrong baseline for subsequent measurements",
+      "failure_effect_user": "Initial ESC response incorrect or missing; if failure occurs during critical maneuver after power cycle, yaw control is impaired",
+      "severity": 7,
+      "failure_cause": "Sensor communication bus (SPI, I2C) not initialized correctly; sensor self-test fails but error not checked in firmware; sensor clock not stable at startup",
+      "occurrence": 3,
+      "prevention_control": "Firmware startup sequence includes sensor communication validation; sensor self-test result checked and reported; SPI/I2C initialization with timeout",
+      "detection_control": "Startup diagnostic test (sensor present, responding, self-test pass); if test fails, DTC set and ECU enters limited function mode; design validation includes cold-start testing",
+      "detection": 4,
+      "recommended_action": "Implement sensor startup health check before algorithm enable; log diagnostic code if sensor initialization fails; validate over temperature range (-40 to +85°C) with cold soak test",
+      "owner": "Controls Team Lead",
+      "target_date": "2025-06-15"
+    }
+  ]
+}

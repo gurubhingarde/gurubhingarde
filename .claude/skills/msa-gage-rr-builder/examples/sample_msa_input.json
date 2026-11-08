@@ -1,0 +1,44 @@
+{
+  "gage": {
+    "id": "WSS-0342",
+    "characteristic": "Wheel Speed Sensor Signal Output (mV DC)",
+    "make": "Bosch",
+    "model": "DM8425",
+    "calibration_date": "2026-03-15",
+    "resolution": "0.1 mV",
+    "range": "0-5 V",
+    "units": "mV",
+    "operators": ["Alice (Sensor Lab Lead)", "Bob (Quality Tech)", "Carol (Maintenance)"]
+  },
+  "study_design": {
+    "num_parts": 10,
+    "num_operators": 3,
+    "num_trials": 3,
+    "randomization_scheme": "Crossed: each operator measures each part 3 times in random order"
+  },
+  "raw_data": [
+    {"part_id": "P001", "operator": "Alice", "trial": 1, "measurement_value": 2.45},
+    {"part_id": "P001", "operator": "Alice", "trial": 2, "measurement_value": 2.47},
+    {"part_id": "P001", "operator": "Alice", "trial": 3, "measurement_value": 2.46},
+    {"part_id": "P001", "operator": "Bob", "trial": 1, "measurement_value": 2.46},
+    {"part_id": "P001", "operator": "Bob", "trial": 2, "measurement_value": 2.48},
+    {"part_id": "P001", "operator": "Bob", "trial": 3, "measurement_value": 2.47},
+    {"part_id": "P001", "operator": "Carol", "trial": 1, "measurement_value": 2.44},
+    {"part_id": "P001", "operator": "Carol", "trial": 2, "measurement_value": 2.45},
+    {"part_id": "P001", "operator": "Carol", "trial": 3, "measurement_value": 2.46},
+    {"part_id": "P002", "operator": "Alice", "trial": 1, "measurement_value": 3.12},
+    {"part_id": "P002", "operator": "Alice", "trial": 2, "measurement_value": 3.14},
+    {"part_id": "P002", "operator": "Alice", "trial": 3, "measurement_value": 3.13},
+    {"part_id": "P002", "operator": "Bob", "trial": 1, "measurement_value": 3.13},
+    {"part_id": "P002", "operator": "Bob", "trial": 2, "measurement_value": 3.15},
+    {"part_id": "P002", "operator": "Bob", "trial": 3, "measurement_value": 3.14},
+    {"part_id": "P002", "operator": "Carol", "trial": 1, "measurement_value": 3.11},
+    {"part_id": "P002", "operator": "Carol", "trial": 2, "measurement_value": 3.12},
+    {"part_id": "P002", "operator": "Carol", "trial": 3, "measurement_value": 3.13}
+  ],
+  "attribute_study": [
+    {"part_id": "P001", "reference_standard": "PASS", "operator_1": "PASS", "operator_2": "PASS", "operator_3": "PASS"},
+    {"part_id": "P002", "reference_standard": "PASS", "operator_1": "PASS", "operator_2": "PASS", "operator_3": "PASS"},
+    {"part_id": "P003", "reference_standard": "FAIL", "operator_1": "FAIL", "operator_2": "FAIL", "operator_3": "FAIL"}
+  ]
+}

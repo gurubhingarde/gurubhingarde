@@ -1,0 +1,25 @@
+{
+  "tsc_metadata": {
+    "project": "Project Phoenix — MY2027 Compact SUV",
+    "doc_id": "TSC-ESC-001",
+    "revision": "0.1",
+    "date": "2026-04-28",
+    "author": "(your name)",
+    "approver": "(approver)"
+  },
+  "architecture": {
+    "hw_components": [
+      {"id": "HW01", "name": "ESC ECU PCB",                  "part": "Tier-1 P/N TBD",      "allocated_nodes": ["N10","N11","N12","N13","N20"], "power_domain": "12V_main + internal 5V_sensor_A/B + 3.3V_logic", "clock_domain": "CLK_50MHz_A (main) + CLK_50MHz_B (safety)", "notes": "Two-MCU lockstep architecture; safety MCU on independent 12V_aux rail with separate clock crystal."},
+      {"id": "HW02", "name": "Wheel Speed Sensors x4",        "part": "Hall-effect, OEM std", "allocated_nodes": ["N01","N02","N03","N04"],       "power_domain": "12V_main",         "clock_domain": "asynchronous", "notes": "Single shared 12V supply; consider separate fuses per axle."},
+      {"id": "HW03", "name": "IMU (Yaw + Lat Acc)",          "part": "Bosch SMI230 or equiv","allocated_nodes": ["N05"],                          "power_domain": "5V_sensor_A",      "clock_domain": "internal", "notes": "SPI interface to N10 only — opportunity to add SPI to N11 for cross-check."},
+      {"id": "HW04", "name": "Hydraulic Modulator Assembly",  "part": "TRW MK-100 class",     "allocated_nodes": ["N20","N21"],                    "power_domain": "12V_main",         "clock_domain": "n/a",     "notes": "Driver IC self-test on every ignition cycle."},
+      {"id": "HW05", "name": "Vehicle Power Distribution",    "part": "OEM PDB",              "allocated_nodes": ["N08"],                          "power_domain": "battery + ignition", "clock_domain": "n/a",     "notes": "ESC main fuse 30A; aux fuse 5A for safety MCU."}
+    ],
+    "sw_partitions": [
+      {"id": "SP01", "name": "Yaw Control Application",       "hosted_on": "HW01", "allocated_nodes": ["N12"],     "rtos": "AUTOSAR Classic OS / OSEK", "asil": "B(D)", "notes": "Runs on N10 main MCU. MPU partition isolating from QM diagnostic SW."},
+      {"id": "SP02", "name": "Safety Monitor",                 "hosted_on": "HW01", "allocated_nodes": ["N11","N12"],"rtos": "Bare-metal on safety MCU", "asil": "B(D)", "notes": "Independent code base; cross-checks N10 outputs."},
+      {"id": "SP03", "name": "Diagnostic Stack (UDS / DTC)",   "hosted_on": "HW01", "allocated_nodes": [],          "rtos": "AUTOSAR Classic OS",       "asil": "QM",   "notes": "QM partition; isolated by MPU."},
+      {"id": "SP04", "name": "Communication Stack (CAN)",      "hosted_on": "HW01", "allocated_nodes": ["N06","N22"],"rtos": "AUTOSAR Classic OS",       "asil": "ASIL D", "notes": "E2E protection library applied to all SG-relevant signals."}
+    ]
+  }
+}

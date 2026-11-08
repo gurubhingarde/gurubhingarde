@@ -1,0 +1,85 @@
+{
+  "project": {
+    "name": "Electric Stability Control (ESC) — Concept Phase Safety Case",
+    "item_name": "Electronic Stability Control Unit (ESC ECU)",
+    "doc_id": "SC-ESC-2026-001",
+    "revision": "1.0",
+    "date": "2026-04-29",
+    "fsm": "John Smith",
+    "approver": "Jane Doe",
+    "company": "Automotive OEM",
+    "vehicle_program": "Mid-Size Sedan Program 2027",
+    "target_asil": "D"
+  },
+  "linked_artifacts": {
+    "item_definition": "/sessions/vigilant-ecstatic-maxwell/mnt/CL work/item-definition-builder/examples/ESC_Item_Definition_demo.xlsx",
+    "hara": "/sessions/vigilant-ecstatic-maxwell/mnt/CL work/hara-builder/examples/HARA_ESC_demo.xlsx",
+    "fsc": "/sessions/vigilant-ecstatic-maxwell/mnt/CL work/fsc-builder/examples/FSC_ESC_demo_v2.xlsx",
+    "tsc": "/sessions/vigilant-ecstatic-maxwell/mnt/CL work/tsc-builder/examples/TSC_ESC_demo.xlsx",
+    "fmeda": "/sessions/vigilant-ecstatic-maxwell/mnt/CL work/fmeda-builder/examples/FMEDA_ESC_demo.xlsx",
+    "hw_safety_reqs": "/sessions/vigilant-ecstatic-maxwell/mnt/CL work/hw-safety-reqs-builder/examples/HW_SR_ESC_demo.xlsx",
+    "sw_safety_reqs": null,
+    "safety_plan": null
+  },
+  "tools_used": [
+    {
+      "name": "MATLAB Simulink",
+      "tcl": "T3"
+    },
+    {
+      "name": "Compiler (GCC ARM)",
+      "tcl": "T2"
+    },
+    {
+      "name": "CANoe (Vector)",
+      "tcl": "T2"
+    }
+  ],
+  "confirmation_reviews": [
+    {
+      "work_product": "HARA workbook",
+      "reviewer": "Michael Chen (Independent Safety Consultant)",
+      "independence": "I2",
+      "date": "2026-02-15",
+      "status": "Approved"
+    },
+    {
+      "work_product": "FSC workbook (FTA, SG allocation, decomposition)",
+      "reviewer": "Michael Chen (Independent Safety Consultant)",
+      "independence": "I2",
+      "date": "2026-03-01",
+      "status": "Approved"
+    },
+    {
+      "work_product": "TSC workbook (TSR allocation, mechanisms, HSI)",
+      "reviewer": "Michael Chen (Independent Safety Consultant)",
+      "independence": "I2",
+      "date": "2026-03-22",
+      "status": "Approved"
+    },
+    {
+      "work_product": "FMEDA workbook (HW metrics SPFM/LFM/PMHF)",
+      "reviewer": "Dr. Sarah Williams (HW Safety Engineer, Different Team)",
+      "independence": "I2",
+      "date": "2026-04-10",
+      "status": "Approved"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OI-001",
+      "description": "SW safety requirements verification coverage data pending integration test completion",
+      "owner": "Alice Brown (SW Lead)",
+      "due_date": "2026-05-15",
+      "risk_level": "Low"
+    },
+    {
+      "id": "OI-002",
+      "description": "HW FMEDA DC% refinement for one minor failure mode pending final diagnostic implementation",
+      "owner": "Robert Kumar (HW Lead)",
+      "due_date": "2026-05-10",
+      "risk_level": "Very Low"
+    }
+  ],
+  "executive_summary_text": "The Electronic Stability Control (ESC) ECU has been developed in accordance with ISO 26262:2018 to ASIL D. The HARA identifies five safety goals (SG-001 through SG-005) addressing loss of yaw rate control, sensor signal corruption, and actuator command failures. All safety goals are allocated to functional safety requirements (FSRs) in the FSC, with decomposition employed for two of the five goals per DFA coupling analysis. The FSC allocates FSRs to the Electronic Control Unit node with resulting ASIL C (post-decomposition). Technical Safety Concept refines these to six HW-TSRs and eight SW-TSRs, with mechanisms including dual-core lockstep, E2E protection, and watchdog timers. Hardware FMEDA demonstrates compliance with SPFM >= 99%, LFM >= 90%, and PMHF < 10 FIT. Software verification includes statement and branch coverage >= 95% for ASIL D code, plus MC/DC for critical decision logic. All confirmation reviews completed with required independence. The item is acceptably safe for integration into the Mid-Size Sedan 2027 program."
+}

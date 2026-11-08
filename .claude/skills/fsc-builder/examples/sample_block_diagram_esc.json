@@ -1,0 +1,41 @@
+{
+  "fsc_metadata": {
+    "project": "Project Phoenix — MY2027 Compact SUV",
+    "doc_id": "FSC-ESC-001",
+    "revision": "0.1",
+    "date": "2026-04-28",
+    "author": "(your name)",
+    "approver": "(approver)"
+  },
+  "block_diagram": {
+    "image_path": "(insert path to architecture image — embedded after generation)",
+    "nodes": [
+      {"id": "N01", "name": "Wheel Speed Sensor FL",         "type": "sensor",    "asil_relevant": true,  "inputs": [],                       "outputs": ["N10"], "shared_resources": ["12V_main", "GND_chassis"]},
+      {"id": "N02", "name": "Wheel Speed Sensor FR",         "type": "sensor",    "asil_relevant": true,  "inputs": [],                       "outputs": ["N10"], "shared_resources": ["12V_main", "GND_chassis"]},
+      {"id": "N03", "name": "Wheel Speed Sensor RL",         "type": "sensor",    "asil_relevant": true,  "inputs": [],                       "outputs": ["N10"], "shared_resources": ["12V_main", "GND_chassis"]},
+      {"id": "N04", "name": "Wheel Speed Sensor RR",         "type": "sensor",    "asil_relevant": true,  "inputs": [],                       "outputs": ["N10"], "shared_resources": ["12V_main", "GND_chassis"]},
+      {"id": "N05", "name": "IMU (Yaw + Lat Acc)",           "type": "sensor",    "asil_relevant": true,  "inputs": [],                       "outputs": ["N10", "N11"], "shared_resources": ["5V_sensor_A", "GND_signal"]},
+      {"id": "N06", "name": "Steering Angle Sensor (CAN)",   "type": "comm_in",   "asil_relevant": true,  "inputs": [],                       "outputs": ["N10"], "shared_resources": ["CAN_chassis"]},
+      {"id": "N07", "name": "Brake Pressure Sensor",         "type": "sensor",    "asil_relevant": true,  "inputs": [],                       "outputs": ["N10"], "shared_resources": ["5V_sensor_B", "GND_signal"]},
+      {"id": "N08", "name": "Vehicle 12V Supply",            "type": "power_in",  "asil_relevant": true,  "inputs": [],                       "outputs": ["N10", "N11", "N20"], "shared_resources": ["12V_main"]},
+      {"id": "N09", "name": "Ignition / Wake-up signal",     "type": "comm_in",   "asil_relevant": false, "inputs": [],                       "outputs": ["N10"], "shared_resources": []},
+
+      {"id": "N10", "name": "ESC Main MCU (Yaw control SW)", "type": "processor", "asil_relevant": true,  "inputs": ["N01","N02","N03","N04","N05","N06","N07","N08","N09"], "outputs": ["N20","N21"], "redundancy_group": "esc_compute", "shared_resources": ["12V_main","CLK_50MHz_A"]},
+      {"id": "N11", "name": "ESC Safety MCU (Lockstep monitor)", "type": "processor", "asil_relevant": true, "inputs": ["N05","N08"], "outputs": ["N20"], "redundancy_group": "esc_compute", "shared_resources": ["12V_aux","CLK_50MHz_B"]},
+      {"id": "N12", "name": "Yaw Control SW Partition",      "type": "software",  "asil_relevant": true,  "inputs": ["N10"],                  "outputs": [], "shared_resources": ["RTOS_kernel"]},
+      {"id": "N13", "name": "Calibration Flash",             "type": "memory",    "asil_relevant": true,  "inputs": ["N10"],                  "outputs": [], "shared_resources": ["12V_main"]},
+
+      {"id": "N20", "name": "Hydraulic Modulator Driver IC", "type": "driver",    "asil_relevant": true,  "inputs": ["N10","N11","N08"],      "outputs": ["N21"], "shared_resources": ["12V_main"]},
+      {"id": "N21", "name": "Hydraulic Modulator Valves",    "type": "actuator",  "asil_relevant": true,  "inputs": ["N20"],                  "outputs": [], "shared_resources": ["12V_main","Brake_fluid"]},
+      {"id": "N22", "name": "Engine Torque Request (CAN)",   "type": "comm_out",  "asil_relevant": true,  "inputs": ["N10"],                  "outputs": [], "shared_resources": ["CAN_powertrain"]},
+      {"id": "N23", "name": "Driver Warning Lamp (CAN)",     "type": "comm_out",  "asil_relevant": false, "inputs": ["N10"],                  "outputs": [], "shared_resources": ["CAN_chassis"]}
+    ]
+  },
+  "safety_goal_overrides": {
+    "SG-001": {"ftti_ms": 150},
+    "SG-002": {"ftti_ms": 150, "selected_decomposition": "B(D) + B(D)"},
+    "SG-003": {"ftti_ms": 200},
+    "SG-004": {"ftti_ms": 100}
+  },
+  "fsr_overrides": []
+}

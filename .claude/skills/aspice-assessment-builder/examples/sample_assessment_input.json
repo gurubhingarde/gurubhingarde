@@ -1,0 +1,79 @@
+{
+  "project": {
+    "name": "Vehicle Control Module Assessment",
+    "doc_id": "ASPICE-ASM-2025-001",
+    "revision": "1.0",
+    "date": "2025-05-01",
+    "assessor_name": "John Smith",
+    "lead_assessor_name": "Jane Doe",
+    "customer": "OEM Customer XYZ",
+    "sponsor": "VP Engineering",
+    "aspice_version": "v3.1"
+  },
+  "scope": {
+    "process_areas": ["SYS.1", "SYS.2", "SWE.1", "SWE.2", "SWE.3", "SUP.1", "SUP.8"],
+    "scope_description": "Assessment covers system concept, system requirements, software development from design through unit testing, and configuration management processes for the vehicle control module project."
+  },
+  "processes": [
+    {
+      "process_id": "SYS.1",
+      "process_name": "System Concept",
+      "purpose": "Establish the high-level concept of the system.",
+      "outcomes": ["System concept established", "System boundary defined", "Stakeholder needs captured"],
+      "owner": "Systems Engineering Lead",
+      "base_practices": [
+        {
+          "bp_id": "BP1",
+          "text": "Establish system concept statement",
+          "evidence": "Project charter, vision document",
+          "rating": "F"
+        },
+        {
+          "bp_id": "BP2",
+          "text": "Define system boundary and interfaces",
+          "evidence": "System architecture diagram, interface specification",
+          "rating": "L"
+        }
+      ],
+      "generic_practices": [
+        {
+          "gp_id": "GP1",
+          "cl": 2,
+          "text": "Establish and maintain documented process description",
+          "evidence": "Process documentation, templates",
+          "rating": "P"
+        }
+      ]
+    },
+    {
+      "process_id": "SWE.1",
+      "process_name": "Software Implementation",
+      "purpose": "Implement software units and integrate them with software components.",
+      "outcomes": ["Software units implemented", "Unit tests executed", "Software components integrated"],
+      "owner": "Software Development Lead",
+      "base_practices": [
+        {
+          "bp_id": "BP1",
+          "text": "Implement software units according to design specification",
+          "evidence": "Source code repository, code review records",
+          "rating": "F"
+        },
+        {
+          "bp_id": "BP2",
+          "text": "Execute unit tests and record results",
+          "evidence": "Unit test reports, coverage metrics",
+          "rating": "L"
+        }
+      ],
+      "generic_practices": [
+        {
+          "gp_id": "GP1",
+          "cl": 2,
+          "text": "Manage work products",
+          "evidence": "Version control logs, artifact tracking",
+          "rating": "L"
+        }
+      ]
+    }
+  ]
+}
