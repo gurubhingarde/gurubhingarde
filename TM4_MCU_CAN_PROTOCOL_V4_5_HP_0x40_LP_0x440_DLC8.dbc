@@ -1,0 +1,247 @@
+VERSION ""
+
+
+NS_ : 
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	CAT_DEF_
+	CAT_
+	FILTER
+	BA_DEF_DEF_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_TABLE_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_REL_
+	BA_DEF_DEF_REL_
+	BU_SG_REL_
+	BU_EV_REL_
+	BU_BO_REL_
+	SG_MUL_VAL_
+
+BS_:
+
+BU_: MCU VMU
+VAL_TABLE_ Vt_MotorCoolingFlowRequestStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_TABLE_ Vt_DriveCoolingFlowRequestStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_TABLE_ Vt_EmergencyStop 1 "Emergency stop requested " 0 "System OK " ;
+VAL_TABLE_ Vt_McuRequestId 7 "McuTotalMotorRotationUsingMcu" 6 "McuTotalMotorRotation" 5 "McuProtocolVersion" 4 "McuSwVersion2" 3 "McuSwVersion1" 2 "McuMaxMotorSpeed" 1 "McuMaxMotorTorque" 0 "McuSelectProtocolVersion" ;
+VAL_TABLE_ Vt_Acknowledgement 1 "Ack (Positive)" 0 "Nack (Negative)" ;
+VAL_TABLE_ Vt_VmuRequestId 0 "VmuBootNumber (Power up number)" ;
+VAL_TABLE_ Vt_CommandMode 2 "Speed Mode (Use SpeedCommand)" 1 "Torque Mode (Use TorqueCommand)" ;
+VAL_TABLE_ Vt_OperationalMode 3 "Ev - Purely electric" 0 "Neutral - No Torque" ;
+VAL_TABLE_ Vt_RegenDerating 11 "Limp Home" 10 "Defect sensor machine" 9 "Overheat machine" 8 "Overheat drive" 7 "DC voltage" 6 "Maximum power" 5 "Defect sensor" 4 "Overheat" 3 "Over speed" 2 "Internal" 1 "Battery current" 0 "None" ;
+VAL_TABLE_ Vt_TractionDerating 11 "Limp Home" 10 "Defect sensor machine" 9 "Overheat machine" 8 "Overheat drive" 7 "DC voltage" 6 "Maximum power" 5 "Defect sensor" 4 "Overheat" 3 "Over speed" 2 "Internal" 1 "Battery current" 0 "None" ;
+VAL_TABLE_ Vt_State 8 "WaitForSafeCondition" 7 "ReadyToShutdown" 6 "CloseDown" 5 "Failure" 4 "Operational" 3 "TearDown" 2 "Startup" 1 "Standby" 0 "Initialisation" ;
+VAL_TABLE_ Vt_OperationRequest 2 "ShutdownReq" 1 "OperationalReq" 0 "StandbyReq" ;
+
+
+BO_ 1098 McuThermal2: 8 Vector__XXX
+ SG_ MotorTemperature : 0|8@1+ (1,-40) [0|250] "Degree C" Vector__XXX
+ SG_ EMITemperature : 16|8@1+ (1,-40) [0|250] "Degree C" Vector__XXX
+ SG_ MCUTemperature : 24|8@1+ (1,-40) [0|250] "Degree C" Vector__XXX
+ SG_ AmbientTemperature : 8|8@1+ (1,-40) [0|250] "Degree C" Vector__XXX
+ SG_ RollingCounter : 36|4@1+ (1,0) [0|15] "" Vector__XXX
+
+BO_ 1092 VmuSelectProtocolVersion: 2 VMU
+ SG_ MajorMcuProtocol : 0|8@1+ (1,0) [0|0] ""  MCU
+ SG_ MinorMcuProtocol : 8|8@1+ (1,0) [0|0] ""  MCU
+
+BO_ 1096 McuPollingMcuResponse: 8 MCU
+ SG_ CommandModeMinVoltage m8 : 8|8@1+ (1,0) [1|3] ""  VMU
+ SG_ MinDCVoltage m8 : 16|15@1+ (0.125,0) [0|4090] "V"  VMU
+ SG_ CommandModeMaxVoltage m7 : 8|8@1+ (1,0) [1|3] ""  VMU
+ SG_ MaxDCVoltage m7 : 16|15@1+ (0.125,0) [0|4090] "V"  VMU
+ SG_ TotalMotorRotationUsingMcu m6 : 8|48@1+ (1,0) [0|0] ""  VMU
+ SG_ ExtensionMinor m0 : 32|8@1+ (1,0) [0|0] ""  VMU
+ SG_ ExtensionMajor m0 : 24|8@1+ (1,0) [0|0] ""  VMU
+ SG_ TotalMotorRotation m5 : 8|48@1+ (1,0) [0|0] ""  VMU
+ SG_ SoftwareRevision m4 : 8|32@1+ (1,0) [0|0] ""  VMU
+ SG_ SoftwareBranch m3 : 24|16@1+ (1,0) [0|0] ""  VMU
+ SG_ ProtocolMinor m0 : 16|8@1+ (1,0) [0|0] ""  VMU
+ SG_ ProtocolMajor m0 : 8|8@1+ (1,0) [0|0] ""  VMU
+ SG_ MaxMotorSpeed m2 : 8|16@1+ (1,-32767) [0|32760] "RPM"  VMU
+ SG_ MaxMotorTorque m1 : 8|15@1+ (0.125,0) [0|4090] "Nm"  VMU
+ SG_ SoftwareMinor m3 : 16|8@1+ (1,0) [0|0] ""  VMU
+ SG_ SoftwareMajor m3 : 8|8@1+ (1,0) [0|0] ""  VMU
+ SG_ McuRequestId M : 0|7@1+ (1,0) [0|0] ""  VMU
+ SG_ Acknowledgement : 7|1@1+ (1,0) [0|0] ""  VMU
+
+BO_ 1095 VmuPollingMcu: 8 VMU
+ SG_ CommandModeMinVoltage m8 : 8|8@1+ (1,0) [1|3] ""  MCU
+ SG_ CommandModeMaxVoltage m7 : 8|8@1+ (1,0) [1|3] ""  MCU
+ SG_ McuRequestId M : 0|7@1+ (1,0) [0|0] ""  MCU
+
+BO_ 1091 McuOnEventInfo1: 8 MCU
+ SG_ RollingCounter : 36|4@1+ (1,0) [0|15] ""  VMU
+ SG_ EventId : 0|16@1+ (1,0) [0|65535] ""  VMU
+
+BO_ 1088 McuInfo1: 8 MCU
+ SG_ RollingCounter : 44|4@1+ (1,0) [0|15] ""  VMU
+ SG_ HighPowerVoltageStatus : 21|1@1+ (1,0) [0|0] ""  VMU
+ SG_ HighPowerVoltage : 8|11@1+ (1,0) [0|2046] "V"  VMU
+ SG_ HighPowerCurrentStatus : 19|1@1+ (1,0) [0|0] ""  VMU
+ SG_ HighPowerCurrent : 24|14@1+ (0.25,-2048) [-2046|2046] "A"  VMU
+ SG_ AuxiliaryVoltageStatus : 20|1@1+ (1,0) [0|0] ""  VMU
+ SG_ AuxiliaryVoltage : 0|8@1+ (0.25,0) [0|31] "V"  VMU
+
+BO_ 1090 McuEventInfo1: 8 MCU
+ SG_ FaultPhaseToChassisStatus : 4|1@1+ (1,0) [0|0] ""  VMU
+ SG_ FaultInterlockMotorCableStatus : 6|1@1+ (1,0) [0|0] ""  VMU
+ SG_ FaultInterlockBatteryCableStatus : 5|1@1+ (1,0) [0|0] ""  VMU
+ SG_ FaultDriveCoverWasOpenedStatus : 7|1@1+ (1,0) [0|0] ""  VMU
+ SG_ FaultDriveCoverWasOpened : 3|1@1+ (1,0) [0|1] ""  VMU
+ SG_ FaultInterlockMotorCable : 2|1@1+ (1,0) [0|1] ""  VMU
+ SG_ FaultInterlockBatteryCable : 1|1@1+ (1,0) [0|1] ""  VMU
+ SG_ FaultPhaseToChassis : 0|1@1+ (1,0) [0|1] ""  VMU
+
+BO_ 66 VmuCommandSafety: 5 VMU
+ SG_ ReferenceTorqueCommand m1 : 0|16@1+ (0.125,-4096) [-4090|4090] "Nm"  MCU
+ SG_ ReferenceVoltageCommand m3 : 0|16@1+ (0.125,-4096) [0|4090] "V"  MCU
+ SG_ RollingCounter : 36|4@1+ (1,0) [0|15] ""  MCU
+ SG_ ReferenceSpeedCommand m2 : 16|16@1+ (1,-32767) [-32760|32760] "RPM"  MCU
+ SG_ ReferenceCommandMode M : 32|2@1+ (1,0) [1|3] ""  MCU
+
+BO_ 65 VmuCommand2: 6 VMU
+ SG_ VoltageCommandStatus m3 : 6|1@1+ (1,0) [0|0] ""  MCU
+ SG_ VoltageCommand m3 : 8|16@1+ (0.125,-4096) [0|4090] "V"  MCU
+ SG_ CommandMode M : 3|2@1+ (1,0) [1|3] ""  MCU
+ SG_ SpeedCommandStatus m2 : 5|1@1+ (1,0) [0|0] ""  MCU
+ SG_ SpeedCommand m2 : 24|16@1+ (1,-32767) [-32760|32760] "RPM"  MCU
+ SG_ RollingCounter : 44|4@1+ (1,0) [0|15] ""  MCU
+ SG_ TorqueCommandStatus m1 : 6|1@1+ (1,0) [0|0] ""  MCU
+ SG_ TorqueCommand m1 : 8|16@1+ (0.125,-4096) [-4090|4090] "Nm"  MCU
+ SG_ OperationalMode : 0|3@1+ (1,0) [0|3] ""  MCU
+
+BO_ 1094 VmuPollingVmuResponse: 8 VMU
+ SG_ BootNumber m0 : 8|16@1+ (1,0) [0|0] ""  MCU
+ SG_ Acknowledgement : 7|1@1+ (1,0) [0|0] ""  MCU
+ SG_ VmuRequestId M : 0|7@1+ (1,0) [0|127] ""  MCU
+
+BO_ 1093 McuPollingVmu: 8 MCU
+ SG_ VmuRequestId M : 0|7@1+ (1,0) [0|127] ""  VMU
+
+BO_ 1097 McuThermal1: 8 MCU
+ SG_ RollingCounter : 28|4@1+ (1,0) [0|15] ""  VMU
+ SG_ MotorCoolingFlowRequestStatus : 25|1@1+ (1,0) [0|0] ""  VMU
+ SG_ MotorCoolingFlowRequest : 8|8@1+ (0.78125,0) [0|100] "%"  VMU
+ SG_ DriveCoolingFlowRequestStatus : 24|1@1+ (1,0) [0|0] ""  VMU
+ SG_ ThermalIndicatorStatus : 26|1@1+ (1,0) [0|1] ""  VMU
+ SG_ ThermalIndicator : 16|8@1+ (0.78125,0) [0|100] ""  VMU
+ SG_ DriveCoolingFlowRequest : 0|8@1+ (0.78125,0) [0|100] "%"  VMU
+
+BO_ 1089 McuInfo2: 8 MCU
+ SG_ RollingCounter : 52|4@1+ (1,0) [0|15] ""  VMU
+ SG_ MotorTorqueEstimatedStatus : 49|1@1+ (1,0) [0|0] ""  VMU
+ SG_ RegenTorqueAvailStatus : 51|1@1+ (1,0) [0|0] ""  VMU
+ SG_ TractionTorqueAvailStatus : 50|1@1+ (1,0) [0|0] ""  VMU
+ SG_ RegenTorqueAvail : 32|15@1+ (0.125,0) [0|4090] "Nm"  VMU
+ SG_ TractionTorqueAvail : 16|15@1+ (0.125,0) [0|4090] "Nm"  VMU
+ SG_ MotorTorqueEstimated : 0|16@1+ (0.125,-4096) [-4090|4090] "Nm"  VMU
+
+BO_ 68 McuCommand2Response: 8 MCU
+ SG_ SpeedReductionRequest : 34|1@1+ (1,0) [0|0] ""  VMU
+ SG_ EmergencyStop : 35|1@1+ (1,0) [0|0] ""  VMU
+ SG_ RollingCounter : 36|4@1+ (1,0) [0|15] ""  VMU
+ SG_ MotorAngleStatus : 32|1@1+ (1,0) [0|0] ""  VMU
+ SG_ MotorSpeedStatus : 33|1@1+ (1,0) [0|0] ""  VMU
+ SG_ MotorAngle : 16|16@1+ (1.5258789063E-005,0) [0|0] ""  VMU
+ SG_ MotorSpeed : 0|16@1+ (1,-32767) [-32760|32760] "RPM"  VMU
+
+BO_ 67 McuCommand1Response: 8 MCU
+ SG_ CommandMode : 25|3@1+ (1,0) [1|3] ""  VMU
+ SG_ MaxSafeMotorSpeedReverseStatus : 42|1@1+ (1,0) [0|0] ""  VMU
+ SG_ MaxSafeMotorSpeedReverse : 32|9@1+ (100,0) [0|32800] ""  VMU
+ SG_ MaxSafeMotorSpeedForwardStatus : 41|1@1+ (1,0) [0|0] ""  VMU
+ SG_ MaxSafeMotorSpeedForward : 16|9@1+ (100,0) [0|32800] ""  VMU
+ SG_ RegenDeratingStatus : 7|1@1+ (1,0) [0|0] ""  VMU
+ SG_ OperationalMode : 4|3@1+ (1,0) [0|0] ""  VMU
+ SG_ TractionDeratingStatus : 43|1@1+ (1,0) [0|0] ""  VMU
+ SG_ RollingCounter : 44|4@1+ (1,0) [0|15] ""  VMU
+ SG_ RegenDerating : 8|4@1+ (1,0) [0|0] ""  VMU
+ SG_ TractionDerating : 12|4@1+ (1,0) [0|0] ""  VMU
+ SG_ StateMcu : 0|4@1+ (1,0) [0|0] ""  VMU
+
+BO_ 64 VmuCommand1: 8 VMU
+ SG_ RollingCounter : 60|4@1+ (1,0) [0|15] ""  MCU
+ SG_ MinBatteryVoltageStatus : 46|1@1+ (1,0) [0|0] ""  MCU
+ SG_ MaxDischargeCurrentStatus : 44|1@1+ (1,0) [0|0] ""  MCU
+ SG_ MaxChargeCurrentStatus : 47|1@1+ (1,0) [0|0] ""  MCU
+ SG_ MaxBatteryVoltageStatus : 45|1@1+ (1,0) [0|0] ""  MCU
+ SG_ MinBatteryVoltage : 48|12@1+ (1,0) [0|4094] "V"  MCU
+ SG_ MaxBatteryVoltage : 32|12@1+ (1,0) [0|4094] "V"  MCU
+ SG_ MaxDischargeCurrent : 16|12@1+ (1,0) [0|4094] "A"  MCU
+ SG_ MaxChargeCurrent : 0|12@1+ (1,0) [0|4094] "A"  MCU
+ SG_ OperationRequest : 13|3@1+ (1,0) [0|0] ""  MCU
+
+
+
+BA_DEF_ EV_  "Version" STRING ;
+BA_DEF_  "BusType" STRING ;
+BA_DEF_DEF_  "Version" "CAN Communications Protocol, revision v4.5";
+BA_DEF_DEF_  "BusType" "";
+BA_ "BusType" "CAN";
+VAL_ 1096 McuRequestId 8 "McuMinDCVoltage" 7 "McuMaxDCVoltage" 6 "McuTotalMotorRotationUsingMcu" 5 "McuTotalMotorRotation" 4 "McuSwVersion2" 3 "McuSwVersion1" 2 "McuMaxMotorSpeed" 1 "McuMaxMotorTorque" 0 "McuProtocolVersion" ;
+VAL_ 1096 Acknowledgement 1 "Ack (Positive)" 0 "Nack (Negative)" ;
+VAL_ 1096 CommandModeMinVoltage 3 "DC Voltage Mode (VoltageCommand)" 2 "Speed Mode (SpeedCommand)" 1 "Torque Mode (TorqueCommand)" ;
+VAL_ 1096 CommandModeMaxVoltage 3 "DC Voltage Mode (VoltageCommand)" 2 "Speed Mode (SpeedCommand)" 1 "Torque Mode (TorqueCommand)" ;
+VAL_ 1095 CommandModeMinVoltage 3 "DC Voltage Mode (VoltageCommand)" 2 "Speed Mode (SpeedCommand)" 1 "Torque Mode (TorqueCommand)" ;
+VAL_ 1095 CommandModeMaxVoltage 3 "DC Voltage Mode (VoltageCommand)" 2 "Speed Mode (SpeedCommand)" 1 "Torque Mode (TorqueCommand)" ;
+VAL_ 1095 McuRequestId 8 "McuMinDCVoltage" 7 "McuMaxDCVoltage" 6 "McuTotalMotorRotationUsingMcu" 5 "McuTotalMotorRotation" 4 "McuSwVersion2" 3 "McuSwVersion1" 2 "McuMaxMotorSpeed" 1 "McuMaxMotorTorque" 0 "McuProtocolVersion" ;
+VAL_ 1088 HighPowerVoltageStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 1088 HighPowerCurrentStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 1088 AuxiliaryVoltageStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 1090 FaultPhaseToChassisStatus 1 "Signal is invalid or not used" 0 "Signal associated is valid" ;
+VAL_ 1090 FaultInterlockMotorCableStatus 1 "Signal is invalid or not used" 0 "Signal associated is valid" ;
+VAL_ 1090 FaultInterlockBatteryCableStatus 1 "Signal is invalid or not used" 0 "Signal associated is valid" ;
+VAL_ 1090 FaultDriveCoverWasOpenedStatus 1 "Signal is invalid or not used" 0 "Signal associated is valid" ;
+VAL_ 1090 FaultDriveCoverWasOpened 1 "If signal valid, fault detected" 0 "If signal valid, no fault" ;
+VAL_ 1090 FaultInterlockMotorCable 1 "If signal valid, fault detected" 0 "If signal valid, no fault" ;
+VAL_ 1090 FaultInterlockBatteryCable 1 "If signal valid, fault detected" 0 "If signal valid, no fault" ;
+VAL_ 1090 FaultPhaseToChassis 1 "If signal valid, fault detected" 0 "If signal valid, no fault" ;
+VAL_ 66 ReferenceCommandMode 3 "DC Voltage Mode (VoltageCommand)" 2 "Speed Mode (SpeedCommand)" 1 "Torque Mode (TorqueCommand)" ;
+VAL_ 65 VoltageCommandStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 65 CommandMode 3 "DC Voltage Mode (VoltageCommand)" 2 "Speed Mode (SpeedCommand)" 1 "Torque Mode (TorqueCommand)" ;
+VAL_ 65 SpeedCommandStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 65 TorqueCommandStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 65 OperationalMode 4 "Ev - Gear Shifting" 1 "Generator - Voltage regulation" 3 "Ev - Purely electric" 0 "Neutral - No torque" ;
+VAL_ 1094 VmuRequestId 0 "VmuBootNumber (Power up number)" ;
+VAL_ 1094 Acknowledgement 1 "Ack (Positive)" 0 "Nack (Negative)" ;
+VAL_ 1093 VmuRequestId 0 "VmuBootNumber (Power up number)" ;
+VAL_ 1097 MotorCoolingFlowRequestStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 1097 DriveCoolingFlowRequestStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 1097 ThermalIndicatorStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 1089 MotorTorqueEstimatedStatus 1 "Signal associated is invalid" 0 "Signal associated is correct" ;
+VAL_ 1089 RegenTorqueAvailStatus 1 "Signal associated is invalid" 0 "Signal associated is correct" ;
+VAL_ 1089 TractionTorqueAvailStatus 1 "Signal associated is invalid" 0 "Signal associated is correct" ;
+VAL_ 68 SpeedReductionRequest 1 "Request to reduce speed" 0 "No request" ;
+VAL_ 68 EmergencyStop 1 "Emergency stop requested " 0 "System OK " ;
+VAL_ 68 MotorAngleStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 68 MotorSpeedStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 67 CommandMode 3 "DC Voltage Mode (VoltageCommand)" 2 "Speed Mode (SpeedCommand)" 1 "Torque Mode (TorqueCommand)" ;
+VAL_ 67 MaxSafeMotorSpeedReverseStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 67 MaxSafeMotorSpeedForwardStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 67 RegenDeratingStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 67 OperationalMode 4 "Ev - Gear Shifting assistance" 1 "Generator - Voltage regulation" 3 "Ev - Purely electric" 0 "Neutral - No torque" ;
+VAL_ 67 TractionDeratingStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 67 RegenDerating 11 "Limp Home" 10 "Defect sensor machine" 9 "Overheat machine" 8 "Overheat drive" 7 "DC voltage" 6 "Maximum power" 5 "Defect sensor drive" 4 "Overheat system" 3 "Over speed" 2 "Internal" 1 "Battery current" 0 "None" ;
+VAL_ 67 TractionDerating 11 "Limp Home" 10 "Defect sensor machine" 9 "Overheat machine" 8 "Overheat drive" 7 "DC voltage" 6 "Maximum power" 5 "Defect sensor drive" 4 "Overheat system" 3 "Over speed" 2 "Internal" 1 "Battery current" 0 "None" ;
+VAL_ 67 StateMcu 8 "WaitForSafeCondition" 7 "ReadyToShutdown" 6 "CloseDown" 5 "Failure" 4 "Operational" 3 "TearDown" 2 "Startup" 1 "Standby" 0 "Initialisation" ;
+VAL_ 64 MinBatteryVoltageStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 64 MaxDischargeCurrentStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 64 MaxChargeCurrentStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 64 MaxBatteryVoltageStatus 1 "Signal associated is invalid" 0 "Signal associated is valid" ;
+VAL_ 64 OperationRequest 2 "ShutdownReq" 1 "OperationalReq" 0 "StandbyReq" ;
+
